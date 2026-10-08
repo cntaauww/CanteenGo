@@ -25,7 +25,7 @@ class CheckoutPage extends StatelessWidget {
         backgroundColor: const Color(0xFFF9F7FF),
         elevation: 0,
         title: const Text(
-          'Checkout',
+          'Konfirmasi Pesanan',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
@@ -45,6 +45,7 @@ class CheckoutPage extends StatelessWidget {
                   // =========================
                   // INFORMASI KANTIN
                   // =========================
+
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
@@ -79,7 +80,9 @@ class CheckoutPage extends StatelessWidget {
                                 color: Colors.grey,
                               ),
                             ),
+
                             const SizedBox(height: 3),
+
                             Text(
                               'Kantin $canteenNumber',
                               style: const TextStyle(
@@ -110,7 +113,7 @@ class CheckoutPage extends StatelessWidget {
                   const SizedBox(height: 15),
 
                   // =========================
-                  // TOTAL PEMBAYARAN
+                  // TOTAL PESANAN
                   // =========================
                   Container(
                     width: double.infinity,
@@ -119,80 +122,23 @@ class CheckoutPage extends StatelessWidget {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(18),
                     ),
-                    child: Column(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Subtotal',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                            Text(
-                              _calculateTotal(orderedMenus),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                        const Text(
+                          'Total Pesanan',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
 
-                        const SizedBox(height: 12),
-
-                        const Divider(),
-
-                        const SizedBox(height: 12),
-
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Total Pembayaran',
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              _calculateTotal(orderedMenus),
-                              style: const TextStyle(
-                                fontSize: 19,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF8B6CC7),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 25),
-
-                  // =========================
-                  // INFORMASI PEMBAYARAN
-                  // =========================
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEDE5FF),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.qr_code, color: Color(0xFF8B6CC7)),
-
-                        SizedBox(width: 10),
-
-                        Expanded(
-                          child: Text(
-                            'Pesanan akan dibuat terlebih dahulu '
-                            'dengan status Belum Dibayar. '
-                            'Kamu dapat melakukan pembayaran '
-                            'melalui QRIS setelah pesanan dibuat.',
-                            style: TextStyle(fontSize: 13, height: 1.4),
+                        Text(
+                          _calculateTotal(orderedMenus),
+                          style: const TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF8B6CC7),
                           ),
                         ),
                       ],
@@ -202,7 +148,107 @@ class CheckoutPage extends StatelessWidget {
                   const SizedBox(height: 25),
 
                   // =========================
-                  // BUAT PESANAN
+                  // METODE PEMBAYARAN
+                  // =========================
+                  const Text(
+                    'Metode Pembayaran',
+                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEDE5FF),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 45,
+                          height: 45,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.payments_outlined,
+                            color: Color(0xFF8B6CC7),
+                          ),
+                        ),
+
+                        const SizedBox(width: 12),
+
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Pembayaran di luar aplikasi',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF4A3B63),
+                                ),
+                              ),
+
+                              SizedBox(height: 7),
+
+                              Text(
+                                'Silakan melakukan pembayaran '
+                                'langsung di kantin atau transfer '
+                                'ke rekening penjual. Jika melakukan '
+                                'transfer, tunjukkan bukti transfer '
+                                'kepada pengelola kantin.',
+                                style: TextStyle(fontSize: 13, height: 1.5),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 25),
+
+                  // =========================
+                  // INFORMASI STATUS
+                  // =========================
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF4D6),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFFFD875)),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline, color: Color(0xFFB8860B)),
+
+                        SizedBox(width: 10),
+
+                        Expanded(
+                          child: Text(
+                            'Setelah pesanan dibuat, status '
+                            'pesanan akan menjadi Menunggu Pembayaran. '
+                            'Pengelola kantin akan mengonfirmasi '
+                            'pembayaran sebelum pesanan diproses.',
+                            style: TextStyle(fontSize: 13, height: 1.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 25),
+
+                  // =========================
+                  // TOMBOL BUAT PESANAN
                   // =========================
                   SizedBox(
                     width: double.infinity,
@@ -212,7 +258,7 @@ class CheckoutPage extends StatelessWidget {
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => OrderStatusPage(
+                            builder: (context) => OrderSuccessPage(
                               cart: cart,
                               menus: menus,
                               canteenNumber: canteenNumber,
@@ -243,6 +289,10 @@ class CheckoutPage extends StatelessWidget {
             ),
     );
   }
+
+  // =====================================================
+  // ITEM PESANAN
+  // =====================================================
 
   Widget _checkoutItem(Map<String, dynamic> menu) {
     final int quantity = cart[menu['name']] ?? 0;
@@ -309,6 +359,10 @@ class CheckoutPage extends StatelessWidget {
     );
   }
 
+  // =====================================================
+  // HITUNG TOTAL
+  // =====================================================
+
   String _calculateTotal(List<Map<String, dynamic>> orderedMenus) {
     int total = 0;
 
@@ -326,6 +380,10 @@ class CheckoutPage extends StatelessWidget {
 
     return 'Rp${_formatNumber(total)}';
   }
+
+  // =====================================================
+  // FORMAT ANGKA
+  // =====================================================
 
   String _formatNumber(int number) {
     final String numberString = number.toString();
@@ -349,16 +407,16 @@ class CheckoutPage extends StatelessWidget {
   }
 }
 
-// ==================================================
-// HALAMAN STATUS PESANAN
-// ==================================================
+// =========================================================
+// HALAMAN PESANAN BERHASIL
+// =========================================================
 
-class OrderStatusPage extends StatelessWidget {
+class OrderSuccessPage extends StatelessWidget {
   final Map<String, int> cart;
   final List<Map<String, dynamic>> menus;
   final int canteenNumber;
 
-  const OrderStatusPage({
+  const OrderSuccessPage({
     super.key,
     required this.cart,
     required this.menus,
@@ -378,37 +436,43 @@ class OrderStatusPage extends StatelessWidget {
         backgroundColor: const Color(0xFFF9F7FF),
         elevation: 0,
         title: const Text(
-          'Detail Pesanan',
+          'Pesanan Berhasil',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
 
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
+
         child: Column(
           children: [
             // =========================
-            // BERHASIL
+            // PESANAN BERHASIL
             // =========================
+
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(25),
+
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(22),
               ),
+
               child: Column(
                 children: [
                   Container(
-                    width: 75,
-                    height: 75,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEDE5FF),
+                    width: 80,
+                    height: 80,
+
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEDE5FF),
                       shape: BoxShape.circle,
                     ),
+
                     child: const Icon(
                       Icons.check,
-                      size: 45,
+                      size: 48,
                       color: Color(0xFF9B7DD4),
                     ),
                   ),
@@ -416,8 +480,9 @@ class OrderStatusPage extends StatelessWidget {
                   const SizedBox(height: 18),
 
                   const Text(
-                    'Pesanan Berhasil Dibuat!',
+                    'Pesanan Berhasil Dibuat! 🎉',
                     textAlign: TextAlign.center,
+
                     style: TextStyle(
                       fontSize: 21,
                       fontWeight: FontWeight.bold,
@@ -425,13 +490,13 @@ class OrderStatusPage extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
 
                   const Text(
-                    'Pesanan kamu sudah tercatat '
-                    'di sistem.',
+                    'Pesanan kamu sudah tercatat di sistem.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey, height: 1.4),
+
+                    style: TextStyle(color: Colors.grey, height: 1.5),
                   ),
                 ],
               ),
@@ -440,16 +505,81 @@ class OrderStatusPage extends StatelessWidget {
             const SizedBox(height: 20),
 
             // =========================
-            // STATUS
+            // INFORMASI PEMBAYARAN
+            // =========================
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+
+              decoration: BoxDecoration(
+                color: const Color(0xFFEDE5FF),
+                borderRadius: BorderRadius.circular(18),
+              ),
+
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+
+                children: [
+                  Icon(
+                    Icons.payments_outlined,
+                    color: Color(0xFF8B6CC7),
+                    size: 30,
+                  ),
+
+                  SizedBox(width: 14),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+
+                      children: [
+                        Text(
+                          'Pembayaran',
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+
+                        SizedBox(height: 5),
+
+                        Text(
+                          'Silakan melakukan pembayaran '
+                          'kepada pengelola kantin.',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF4A3B63),
+                          ),
+                        ),
+
+                        SizedBox(height: 7),
+
+                        Text(
+                          'Jika melakukan transfer, '
+                          'tunjukkan bukti transfer '
+                          'kepada pengelola kantin.',
+                          style: TextStyle(fontSize: 13, height: 1.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // =========================
+            // STATUS PESANAN
             // =========================
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
+
               decoration: BoxDecoration(
                 color: const Color(0xFFFFF4D6),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: const Color(0xFFFFD875)),
               ),
+
               child: const Row(
                 children: [
                   Icon(Icons.access_time, color: Color(0xFFB8860B), size: 30),
@@ -459,6 +589,7 @@ class OrderStatusPage extends StatelessWidget {
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+
                       children: [
                         Text(
                           'Status Pesanan',
@@ -468,7 +599,7 @@ class OrderStatusPage extends StatelessWidget {
                         SizedBox(height: 4),
 
                         Text(
-                          'Belum Dibayar',
+                          'Menunggu Pembayaran',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -485,24 +616,28 @@ class OrderStatusPage extends StatelessWidget {
             const SizedBox(height: 20),
 
             // =========================
-            // INFO KANTIN
+            // KANTIN
             // =========================
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(18),
+
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
               ),
+
               child: Row(
                 children: [
                   Container(
                     width: 50,
                     height: 50,
+
                     decoration: BoxDecoration(
                       color: const Color(0xFFEDE5FF),
                       borderRadius: BorderRadius.circular(14),
                     ),
+
                     child: const Icon(
                       Icons.storefront,
                       color: Color(0xFF9B7DD4),
@@ -513,12 +648,15 @@ class OrderStatusPage extends StatelessWidget {
 
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+
                     children: [
                       const Text(
                         'Kantin',
                         style: TextStyle(fontSize: 13, color: Colors.grey),
                       ),
+
                       const SizedBox(height: 3),
+
                       Text(
                         'Kantin $canteenNumber',
                         style: const TextStyle(
@@ -535,17 +673,20 @@ class OrderStatusPage extends StatelessWidget {
             const SizedBox(height: 20),
 
             // =========================
-            // DAFTAR PESANAN
+            // DETAIL PESANAN
             // =========================
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(18),
+
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
               ),
+
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+
                 children: [
                   const Text(
                     'Pesanan',
@@ -559,6 +700,7 @@ class OrderStatusPage extends StatelessWidget {
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
+
                       child: Row(
                         children: [
                           Text(
@@ -595,6 +737,7 @@ class OrderStatusPage extends StatelessWidget {
 
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
                     children: [
                       const Text(
                         'Total',
@@ -603,6 +746,7 @@ class OrderStatusPage extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+
                       Text(
                         _calculateTotal(orderedMenus),
                         style: const TextStyle(
@@ -620,51 +764,43 @@ class OrderStatusPage extends StatelessWidget {
             const SizedBox(height: 25),
 
             // =========================
-            // BAYAR SEKARANG
+            // LIHAT PESANAN
             // =========================
             SizedBox(
               width: double.infinity,
               height: 54,
-              child: ElevatedButton.icon(
+
+              child: ElevatedButton(
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Halaman pembayaran QRIS akan dibuat selanjutnya.',
-                      ),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                  Navigator.pop(context);
                 },
-                icon: const Icon(Icons.qr_code),
-                label: const Text(
-                  'Bayar Sekarang',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF9B7DD4),
                   foregroundColor: Colors.white,
+
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(15),
                   ),
                 ),
+
+                child: const Text(
+                  'Lihat Pesanan',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
 
-            const SizedBox(height: 12),
-
-            const Text(
-              'Pembayaran dilakukan melalui QRIS.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-
-            const SizedBox(height: 25),
+            const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
+
+  // =====================================================
+  // HITUNG TOTAL
+  // =====================================================
 
   String _calculateTotal(List<Map<String, dynamic>> orderedMenus) {
     int total = 0;
@@ -684,6 +820,10 @@ class OrderStatusPage extends StatelessWidget {
     return 'Rp${_formatNumber(total)}';
   }
 
+  // =====================================================
+  // FORMAT ANGKA
+  // =====================================================
+
   String _formatNumber(int number) {
     final String numberString = number.toString();
 
@@ -693,6 +833,7 @@ class OrderStatusPage extends StatelessWidget {
 
     for (int i = numberString.length - 1; i >= 0; i--) {
       result.write(numberString[i]);
+
       count++;
 
       if (count == 3 && i != 0) {

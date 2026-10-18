@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'canteen_page.dart';
+import 'role_selection_page.dart';
 
 void main() {
   runApp(const CanteenGoApp());
@@ -19,7 +19,7 @@ class CanteenGoApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFF9F7FF),
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF9B7DD4)),
       ),
-      home: const CanteenPage(),
+      home: const RoleSelectionPage(),
     );
   }
 }

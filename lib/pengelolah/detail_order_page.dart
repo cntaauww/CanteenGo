@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../data/order_store.dart';
+
 class DetailOrderPage extends StatefulWidget {
   final Map<String, dynamic> order;
 
@@ -12,7 +14,7 @@ class DetailOrderPage extends StatefulWidget {
 class _DetailOrderPageState extends State<DetailOrderPage> {
   late String status;
 
-  final List<String> statuses = [
+  final List<String> statusOptions = [
     'Menunggu Pembayaran',
     'Menunggu Konfirmasi',
     'Diproses',
@@ -20,235 +22,143 @@ class _DetailOrderPageState extends State<DetailOrderPage> {
     'Selesai',
   ];
 
-  static const Color purple = Color(0xFF9B7DD4);
-  static const Color darkPurple = Color(0xFF4A3B63);
-  static const Color background = Color(0xFFF9F7FF);
-
   @override
   void initState() {
     super.initState();
-
-    final currentStatus = widget.order['status']?.toString() ?? statuses.first;
-
-    status = statuses.contains(currentStatus) ? currentStatus : statuses.first;
-  }
-
-  int toInt(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-
-    return int.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  String formatRupiah(dynamic value) {
-    final digits = toInt(value).toString();
-    final result = StringBuffer();
-    int count = 0;
-
-    for (int i = digits.length - 1; i >= 0; i--) {
-      result.write(digits[i]);
-      count++;
-
-      if (count == 3 && i != 0) {
-        result.write('.');
-        count = 0;
-      }
-    }
-
-    return 'Rp${result.toString().split('').reversed.join()}';
+    status = widget.order['status']?.toString() ?? 'Menunggu Pembayaran';
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = (widget.order['items'] as List<dynamic>?) ?? [];
+    final order = widget.order;
 
-    final total = toInt(widget.order['total']);
+    final items = (order['items'] as List<dynamic>?) ?? [];
+
+    final int total = int.tryParse(order['total']?.toString() ?? '0') ?? 0;
 
     return Scaffold(
-      backgroundColor: background,
       appBar: AppBar(
-        backgroundColor: background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'Detail Pesanan',
-          style: TextStyle(color: darkPurple, fontWeight: FontWeight.bold),
-        ),
-        iconTheme: const IconThemeData(color: darkPurple),
+        title: const Text('Detail Pesanan'),
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
       ),
-      body: ListView(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEDE5FF),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Nomor Pesanan'),
-                const SizedBox(height: 6),
-                Text(
-                  widget.order['number']?.toString() ?? '-',
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: darkPurple,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.receipt_long,
+                    size: 60,
+                    color: Colors.deepPurple,
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Pemesan: ${widget.order['student']?.toString() ?? 'Mahasiswa'}',
-                ),
-                Text('Kantin: ${widget.order['canteen']?.toString() ?? '-'}'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Rincian Makanan',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: darkPurple,
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          ...items.whereType<Map>().map((item) {
-            final name = item['name']?.toString() ?? 'Menu';
-
-            // Mendukung data lama (qty) dan data baru (quantity).
-            final qty = toInt(item['quantity'] ?? item['qty']);
-            final price = toInt(item['price']);
-            final subtotal = toInt(item['subtotal'] ?? price * qty);
-            final note = item['note']?.toString().trim() ?? '';
-
-            return Card(
-              color: Colors.white,
-              elevation: 0,
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-                side: const BorderSide(color: Color(0xFFEDE5FF)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item['icon']?.toString() ?? '🍽️',
-                      style: const TextStyle(fontSize: 28),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: darkPurple,
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            '$qty × ${formatRupiah(price)}',
-                            style: const TextStyle(color: Colors.grey),
-                          ),
-                          if (note.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFF1F7),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                'Catatan: $note',
-                                style: const TextStyle(
-                                  color: darkPurple,
-                                  fontSize: 12,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      formatRupiah(subtotal),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: purple,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Total Pesanan',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  formatRupiah(total),
-                  style: const TextStyle(
-                    fontSize: 18,
-                    color: purple,
-                    fontWeight: FontWeight.bold,
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Detail Pesanan Mahasiswa',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Status Pesanan',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: darkPurple,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: DropdownButtonFormField<String>(
-              initialValue: status,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Pilih status',
-                border: OutlineInputBorder(),
+                  const SizedBox(height: 8),
+                  Text(
+                    order['number']?.toString() ?? '-',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      color: Colors.deepPurple,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
-              items: statuses.map((value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value, overflow: TextOverflow.ellipsis),
+            ),
+
+            const SizedBox(height: 28),
+
+            const Text(
+              'Informasi Pesanan',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 12),
+
+            _infoRow('Nomor Pesanan', order['number']?.toString() ?? '-'),
+
+            _infoRow('Kantin', order['canteen']?.toString() ?? '-'),
+
+            _infoRow('Jenis Pesanan', order['servingType']?.toString() ?? '-'),
+
+            _infoRow('Total Pembayaran', 'Rp ${total.toString()}'),
+
+            const SizedBox(height: 24),
+
+            const Text(
+              'Menu yang Dipesan',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 12),
+
+            if (items.isEmpty)
+              const Text('Tidak ada detail menu.')
+            else
+              ...items.map((item) {
+                final menu = item as Map<String, dynamic>;
+
+                final String nama =
+                    menu['name']?.toString() ??
+                    menu['nama']?.toString() ??
+                    'Menu';
+
+                final int jumlah =
+                    int.tryParse(
+                      menu['quantity']?.toString() ??
+                          menu['jumlah']?.toString() ??
+                          '1',
+                    ) ??
+                    1;
+
+                final int harga =
+                    int.tryParse(
+                      menu['price']?.toString() ??
+                          menu['harga']?.toString() ??
+                          '0',
+                    ) ??
+                    0;
+
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.restaurant,
+                      color: Colors.deepPurple,
+                    ),
+                    title: Text(nama),
+                    subtitle: Text('Jumlah: $jumlah'),
+                    trailing: Text('Rp ${(harga * jumlah).toString()}'),
+                  ),
                 );
+              }),
+
+            const SizedBox(height: 24),
+
+            const Text(
+              'Status Pesanan',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 12),
+
+            DropdownButtonFormField<String>(
+              value: statusOptions.contains(status)
+                  ? status
+                  : statusOptions.first,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Pilih Status',
+                prefixIcon: Icon(Icons.sync),
+              ),
+              items: statusOptions.map((item) {
+                return DropdownMenuItem<String>(value: item, child: Text(item));
               }).toList(),
               onChanged: (value) {
                 if (value != null) {
@@ -258,37 +168,71 @@ class _DetailOrderPageState extends State<DetailOrderPage> {
                 }
               },
             ),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            height: 52,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: purple,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+
+            const SizedBox(height: 20),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  final orderNumber = order['number']?.toString() ?? '';
+
+                  if (orderNumber.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Nomor pesanan tidak ditemukan.'),
+                      ),
+                    );
+                    return;
+                  }
+
+                  OrderStore.updateStatus(
+                    orderNumber: orderNumber,
+                    status: status,
+                  );
+
+                  setState(() {
+                    order['status'] = status;
+                  });
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Status diperbarui menjadi: $status'),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.save),
+                label: const Text('Simpan Status'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
               ),
-              onPressed: () {
-                setState(() {
-                  widget.order['status'] = status;
-                });
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Status diperbarui menjadi: $status')),
-                );
-              },
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text('Simpan Status'),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(label, style: const TextStyle(color: Colors.black54)),
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'Status disimpan sementara di memori aplikasi '
-            'dan belum tersimpan ke database.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: Colors.grey),
+          const Text(': '),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
           ),
         ],
       ),

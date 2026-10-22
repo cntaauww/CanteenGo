@@ -1,9 +1,22 @@
 import 'package:flutter/foundation.dart';
 
+import '../services/menu_api_service.dart';
+
 class MenuStore extends ChangeNotifier {
   MenuStore._();
 
   static final MenuStore instance = MenuStore._();
+
+  final MenuApiService _menuApiService = MenuApiService();
+
+  final Map<String, int> _canteenNumbers = {
+    'nasi': 1,
+    'bakso': 2,
+    'minuman': 3,
+  };
+
+  final Set<String> _loadingCanteens = {};
+  final Set<String> _loadedCanteens = {};
 
   final Map<String, List<Map<String, dynamic>>> _menus = {
     'nasi': [
@@ -158,6 +171,83 @@ class MenuStore extends ChangeNotifier {
     ],
   };
 
+  // Memuat menu dari Laravel dan mempertahankan gambar serta ikon lokal.
+  Future<void> loadMenus(String canteenId) async {
+    final canteenNumber = _canteenNumbers[canteenId];
+
+    if (canteenNumber == null ||
+        _loadingCanteens.contains(canteenId) ||
+        _loadedCanteens.contains(canteenId)) {
+      return;
+    }
+
+    _loadingCanteens.add(canteenId);
+
+    try {
+      final serverMenus = await _menuApiService.getMenus(
+        canteenNumber: canteenNumber,
+      );
+
+      final localMenus = _menus.putIfAbsent(canteenId, () => []);
+
+      for (final serverMenu in serverMenus) {
+        final name = serverMenu['nama_menu']?.toString().trim() ?? '';
+
+        if (name.isEmpty) continue;
+
+        final index = localMenus.indexWhere(
+          (menu) =>
+              menu['name']?.toString().trim().toLowerCase() ==
+              name.toLowerCase(),
+        );
+
+        final rawPrice = serverMenu['harga'];
+        final price = rawPrice is num
+            ? rawPrice.toInt()
+            : (double.tryParse(rawPrice?.toString() ?? '') ?? 0).toInt();
+
+        final rawStock = serverMenu['stok'];
+        final stock = rawStock is num
+            ? rawStock.toInt()
+            : int.tryParse(rawStock?.toString() ?? '') ?? 0;
+
+        final rawAvailable = serverMenu['tersedia'];
+        final available =
+            rawAvailable == true ||
+            rawAvailable == 1 ||
+            rawAvailable?.toString() == '1' ||
+            rawAvailable?.toString().toLowerCase() == 'true';
+
+        if (index >= 0) {
+          localMenus[index] = {
+            ...localMenus[index],
+            'price': price,
+            'stock': stock,
+            'available': available,
+            'serverId': serverMenu['id'],
+          };
+        } else {
+          localMenus.add({
+            'name': name,
+            'price': price,
+            'stock': stock,
+            'available': available,
+            'icon': '🍜',
+            'image': canteenId == 'bakso' ? 'assets/images/bakso.jpg' : '',
+            'serverId': serverMenu['id'],
+          });
+        }
+      }
+
+      _loadedCanteens.add(canteenId);
+      notifyListeners();
+    } catch (error) {
+      debugPrint('Gagal memuat menu $canteenId dari Laravel: $error');
+    } finally {
+      _loadingCanteens.remove(canteenId);
+    }
+  }
+
   List<Map<String, dynamic>> getMenus(String canteenId) {
     return List<Map<String, dynamic>>.unmodifiable(
       (_menus[canteenId] ?? []).map(
@@ -166,45 +256,132 @@ class MenuStore extends ChangeNotifier {
     );
   }
 
-  void addMenu(String canteenId, Map<String, dynamic> menu) {
+  // Menambahkan menu ke database sebelum memperbarui tampilan.
+  Future<void> addMenu(String canteenId, Map<String, dynamic> menu) async {
+    final canteenNumber = _canteenNumbers[canteenId];
+
+    if (canteenNumber == null) {
+      throw Exception('Nomor kantin tidak valid.');
+    }
+
+    final result = await _menuApiService.createMenu(
+      canteenNumber: canteenNumber,
+      menu: menu,
+    );
+
+    final serverMenu = result['data'];
+
+    if (serverMenu is! Map || serverMenu['id'] == null) {
+      throw Exception('Respons menu dari Laravel tidak valid.');
+    }
+
+    final savedMenu = Map<String, dynamic>.from(menu);
+    savedMenu['serverId'] = serverMenu['id'];
+
     final list = _menus.putIfAbsent(canteenId, () => []);
-    list.add(Map<String, dynamic>.from(menu));
+    list.add(savedMenu);
+
     notifyListeners();
   }
 
-  void updateMenu(
+  // Memperbarui menu di database.
+  // Jika menu lokal belum mempunyai ID server, menu akan dibuat di Laravel.
+  Future<void> updateMenu(
     String canteenId,
     int index,
     Map<String, dynamic> updatedMenu,
-  ) {
+  ) async {
     final list = _menus[canteenId];
-    if (list == null || index < 0 || index >= list.length) return;
 
-    list[index] = Map<String, dynamic>.from(updatedMenu);
+    if (list == null || index < 0 || index >= list.length) {
+      return;
+    }
+
+    final canteenNumber = _canteenNumbers[canteenId];
+
+    if (canteenNumber == null) {
+      throw Exception('Nomor kantin tidak valid.');
+    }
+
+    final currentMenu = list[index];
+    final payload = Map<String, dynamic>.from(updatedMenu);
+    final serverId = currentMenu['serverId'];
+
+    if (serverId != null) {
+      await _menuApiService.updateMenu(
+        id: int.parse(serverId.toString()),
+        canteenNumber: canteenNumber,
+        menu: payload,
+      );
+
+      payload['serverId'] = serverId;
+    } else {
+      final result = await _menuApiService.createMenu(
+        canteenNumber: canteenNumber,
+        menu: payload,
+      );
+
+      final serverMenu = result['data'];
+
+      if (serverMenu is! Map || serverMenu['id'] == null) {
+        throw Exception('Respons menu dari Laravel tidak valid.');
+      }
+
+      payload['serverId'] = serverMenu['id'];
+    }
+
+    list[index] = {...currentMenu, ...payload};
+
     notifyListeners();
   }
 
-  void deleteMenu(String canteenId, int index) {
+  // Menghapus menu dari database, kemudian dari daftar lokal.
+  Future<void> deleteMenu(String canteenId, int index) async {
     final list = _menus[canteenId];
-    if (list == null || index < 0 || index >= list.length) return;
+
+    if (list == null || index < 0 || index >= list.length) {
+      return;
+    }
+
+    final serverId = list[index]['serverId'];
+
+    if (serverId != null) {
+      await _menuApiService.deleteMenu(int.parse(serverId.toString()));
+    }
 
     list.removeAt(index);
     notifyListeners();
   }
 
-  void setAvailability(String canteenId, int index, bool available) {
+  // Mengubah status ketersediaan menu.
+  Future<void> setAvailability(
+    String canteenId,
+    int index,
+    bool available,
+  ) async {
     final list = _menus[canteenId];
-    if (list == null || index < 0 || index >= list.length) return;
 
-    list[index]['available'] = available;
-    notifyListeners();
+    if (list == null || index < 0 || index >= list.length) {
+      return;
+    }
+
+    final updatedMenu = Map<String, dynamic>.from(list[index]);
+    updatedMenu['available'] = available;
+
+    await updateMenu(canteenId, index, updatedMenu);
   }
 
-  void setStock(String canteenId, int index, int stock) {
+  // Mengubah stok menu.
+  Future<void> setStock(String canteenId, int index, int stock) async {
     final list = _menus[canteenId];
-    if (list == null || index < 0 || index >= list.length) return;
 
-    list[index]['stock'] = stock;
-    notifyListeners();
+    if (list == null || index < 0 || index >= list.length) {
+      return;
+    }
+
+    final updatedMenu = Map<String, dynamic>.from(list[index]);
+    updatedMenu['stock'] = stock;
+
+    await updateMenu(canteenId, index, updatedMenu);
   }
 }

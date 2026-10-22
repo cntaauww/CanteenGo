@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'checkout_page.dart';
+import 'data/order_store.dart';
+import 'order_status_page.dart';
 
 class OrderPage extends StatefulWidget {
   final Map<String, int> cart;
@@ -28,6 +30,27 @@ class _OrderPageState extends State<OrderPage> {
   final Map<String, String> notes = {};
   final Map<String, TextEditingController> controllers = {};
 
+  @override
+  void initState() {
+    super.initState();
+    OrderStore.revision.addListener(refreshOrders);
+  }
+
+  @override
+  void dispose() {
+    OrderStore.revision.removeListener(refreshOrders);
+
+    for (final controller in controllers.values) {
+      controller.dispose();
+    }
+
+    super.dispose();
+  }
+
+  void refreshOrders() {
+    if (mounted) setState(() {});
+  }
+
   TextEditingController getController(String name) {
     return controllers.putIfAbsent(name, () => TextEditingController());
   }
@@ -45,6 +68,7 @@ class _OrderPageState extends State<OrderPage> {
     for (int i = value.length - 1; i >= 0; i--) {
       result.write(value[i]);
       count++;
+
       if (count == 3 && i != 0) {
         result.write('.');
         count = 0;
@@ -56,18 +80,16 @@ class _OrderPageState extends State<OrderPage> {
 
   int calculateTotal(List<Map<String, dynamic>> items) {
     int total = 0;
+
     for (final menu in items) {
       total += parsePrice(menu['price']) * (widget.cart[menu['name']] ?? 0);
     }
+
     return total;
   }
 
-  @override
-  void dispose() {
-    for (final controller in controllers.values) {
-      controller.dispose();
-    }
-    super.dispose();
+  Map<String, dynamic>? get latestOrder {
+    return OrderStore.latestOrderForCanteen(widget.canteenNumber);
   }
 
   @override
@@ -75,6 +97,35 @@ class _OrderPageState extends State<OrderPage> {
     final items = widget.menus
         .where((menu) => (widget.cart[menu['name']] ?? 0) > 0)
         .toList();
+
+    // Jika keranjang kosong, jangan langsung menganggap
+    // mahasiswa belum mempunyai pesanan.
+    if (items.isEmpty) {
+      final order = latestOrder;
+
+      if (order != null) {
+        return buildExistingOrder(order);
+      }
+
+      return Scaffold(
+        backgroundColor: background,
+        appBar: AppBar(
+          backgroundColor: background,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          title: const Text(
+            'Pesanan Saya',
+            style: TextStyle(
+              color: darkPurple,
+              fontWeight: FontWeight.bold,
+              fontSize: 22,
+            ),
+          ),
+          iconTheme: const IconThemeData(color: darkPurple),
+        ),
+        body: buildEmptyCart(),
+      );
+    }
 
     final total = calculateTotal(items);
     final totalItems = items.fold<int>(
@@ -98,94 +149,315 @@ class _OrderPageState extends State<OrderPage> {
         ),
         iconTheme: const IconThemeData(color: darkPurple),
       ),
-      body: items.isEmpty
-          ? buildEmptyCart()
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        children: [
+          buildHeader(totalItems),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              const Icon(Icons.shopping_bag_outlined, color: purple),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Daftar Pesanan',
+                  style: TextStyle(
+                    color: darkPurple,
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Text(
+                '$totalItems item',
+                style: const TextStyle(
+                  color: purple,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          buildCanteenCard(),
+          ...items.map(buildOrderCard),
+          const SizedBox(height: 10),
+          buildTotalCard(total),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CheckoutPage(
+                      cart: widget.cart,
+                      menus: widget.menus,
+                      canteenNumber: widget.canteenNumber,
+                      notes: Map<String, String>.from(notes),
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.shopping_bag_outlined),
+              label: const Text(
+                'Lanjut ke Checkout',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: purple,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.favorite, color: pink, size: 16),
+              SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Periksa pesananmu sebelum checkout, ya!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildExistingOrder(Map<String, dynamic> order) {
+    final orderNumber = order['number']?.toString() ?? '-';
+    final status = order['status']?.toString() ?? 'Menunggu Pembayaran';
+    final items = (order['items'] as List? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+
+    return Scaffold(
+      backgroundColor: background,
+      appBar: AppBar(
+        backgroundColor: background,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: const Text(
+          'Pesanan Saya',
+          style: TextStyle(color: darkPurple, fontWeight: FontWeight.bold),
+        ),
+        iconTheme: const IconThemeData(color: darkPurple),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFBE0EC), Color(0xFFEDE4FF)],
+              ),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: const Column(
               children: [
-                buildHeader(totalItems),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    const Icon(Icons.shopping_bag_outlined, color: purple),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'Daftar Pesanan',
-                        style: TextStyle(
-                          color: darkPurple,
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
+                Icon(Icons.receipt_long_rounded, color: purple, size: 48),
+                SizedBox(height: 12),
+                Text(
+                  'Pesanan kamu sudah tercatat!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.bold,
+                    color: darkPurple,
+                  ),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Kamu tidak perlu checkout ulang.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: darkPurple),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: lilac),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Nomor Antrean',
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  orderNumber,
+                  style: const TextStyle(
+                    fontSize: 27,
+                    fontWeight: FontWeight.bold,
+                    color: darkPurple,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Status Pesanan',
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: lilac,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.access_time_rounded, color: purple),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          status,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: darkPurple,
+                          ),
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Detail Pesanan • Kantin ${order['canteenNumber']}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: darkPurple,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ...items.map((item) {
+                  final name = item['name']?.toString() ?? 'Menu';
+                  final quantity =
+                      int.tryParse(item['quantity'].toString()) ?? 0;
+                  final subtotal =
+                      int.tryParse(item['subtotal'].toString()) ?? 0;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '$name x$quantity',
+                            style: const TextStyle(color: darkPurple),
+                          ),
+                        ),
+                        Text(
+                          formatRupiah(subtotal),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: purple,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                const Divider(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Total',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: darkPurple,
                       ),
                     ),
                     Text(
-                      '$totalItems item',
+                      formatRupiah(
+                        int.tryParse(order['total'].toString()) ?? 0,
+                      ),
                       style: const TextStyle(
-                        color: purple,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                buildCanteenCard(),
-                ...items.map(buildOrderCard),
-                const SizedBox(height: 10),
-                buildTotalCard(total),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CheckoutPage(
-                            cart: widget.cart,
-                            menus: widget.menus,
-                            canteenNumber: widget.canteenNumber,
-                            notes: Map<String, String>.from(notes),
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.shopping_bag_outlined),
-                    label: const Text(
-                      'Lanjut ke Checkout',
-                      style: TextStyle(
-                        fontSize: 16,
                         fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: purple,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.favorite, color: pink, size: 16),
-                    SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        'Periksa pesananmu sebelum checkout, ya!',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                        fontSize: 18,
+                        color: purple,
                       ),
                     ),
                   ],
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => OrderStatusPage(orderNumber: orderNumber),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: purple,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+              child: const Text(
+                'Lihat Status Pesanan',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.restaurant_menu),
+            label: const Text('Kembali ke Menu'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: purple,
+              side: const BorderSide(color: lilac),
+              padding: const EdgeInsets.all(14),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -258,11 +530,7 @@ class _OrderPageState extends State<OrderPage> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(13),
             ),
-            child: const Icon(
-              Icons.storefront_rounded,
-              color: purple,
-              size: 25,
-            ),
+            child: const Icon(Icons.storefront_rounded, color: purple),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -285,7 +553,7 @@ class _OrderPageState extends State<OrderPage> {
               ],
             ),
           ),
-          const Icon(Icons.check_circle_rounded, color: purple, size: 22),
+          const Icon(Icons.check_circle_rounded, color: purple),
         ],
       ),
     );
@@ -302,13 +570,6 @@ class _OrderPageState extends State<OrderPage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: lilac),
-        boxShadow: [
-          BoxShadow(
-            color: purple.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -359,7 +620,6 @@ class _OrderPageState extends State<OrderPage> {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 11,
@@ -380,24 +640,13 @@ class _OrderPageState extends State<OrderPage> {
             ],
           ),
           const SizedBox(height: 15),
-          const Row(
-            children: [
-              Icon(Icons.edit_note_rounded, color: purple, size: 20),
-              SizedBox(width: 6),
-              Text(
-                'Catatan untuk menu ini',
-                style: TextStyle(
-                  color: darkPurple,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-              SizedBox(width: 5),
-              Text(
-                '(opsional)',
-                style: TextStyle(color: Colors.grey, fontSize: 11),
-              ),
-            ],
+          const Text(
+            'Catatan untuk menu ini (opsional)',
+            style: TextStyle(
+              color: darkPurple,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -413,7 +662,7 @@ class _OrderPageState extends State<OrderPage> {
               }
             },
             decoration: InputDecoration(
-              hintText: 'Contoh: jangan terlalu pedas, tambah sambal...',
+              hintText: 'Contoh: jangan terlalu pedas...',
               hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
               filled: true,
               fillColor: background,
@@ -450,7 +699,7 @@ class _OrderPageState extends State<OrderPage> {
         children: [
           const Row(
             children: [
-              Icon(Icons.receipt_long_rounded, color: purple, size: 22),
+              Icon(Icons.receipt_long_rounded, color: purple),
               SizedBox(width: 9),
               Expanded(
                 child: Text(
@@ -505,19 +754,7 @@ class _OrderPageState extends State<OrderPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 125,
-              height: 125,
-              decoration: const BoxDecoration(
-                color: Color(0xFFFBE0EC),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.shopping_bag_outlined,
-                size: 65,
-                color: purple,
-              ),
-            ),
+            const Icon(Icons.shopping_bag_outlined, size: 85, color: purple),
             const SizedBox(height: 23),
             const Text(
               'Keranjangmu masih kosong',
@@ -548,7 +785,6 @@ class _OrderPageState extends State<OrderPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: purple,
                   foregroundColor: Colors.white,
-                  elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(15),
                   ),

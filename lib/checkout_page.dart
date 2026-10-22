@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'data/order_store.dart';
 import 'order_status_page.dart';
 
-class CheckoutPage extends StatelessWidget {
+class CheckoutPage extends StatefulWidget {
   final Map<String, int> cart;
   final List<Map<String, dynamic>> menus;
   final int canteenNumber;
@@ -22,8 +22,22 @@ class CheckoutPage extends StatelessWidget {
   static const Color lilac = Color(0xFFE9DDF8);
   static const Color background = Color(0xFFFFF8FC);
 
+  @override
+  State<CheckoutPage> createState() => _CheckoutPageState();
+}
+
+class _CheckoutPageState extends State<CheckoutPage> {
+  static const Color purple = CheckoutPage.purple;
+  static const Color darkPurple = CheckoutPage.darkPurple;
+  static const Color lilac = CheckoutPage.lilac;
+  static const Color background = CheckoutPage.background;
+
+  // Pilihan penyajian awal.
+  String selectedServingType = 'dine_in';
+
   int getPrice(Map<String, dynamic> menu) {
     final digits = menu['price'].toString().replaceAll(RegExp(r'[^0-9]'), '');
+
     return int.tryParse(digits) ?? 0;
   }
 
@@ -49,14 +63,22 @@ class CheckoutPage extends StatelessWidget {
     int total = 0;
 
     for (final menu in items) {
-      total += getPrice(menu) * (cart[menu['name']] ?? 0);
+      total += getPrice(menu) * (widget.cart[menu['name']] ?? 0);
     }
 
     return total;
   }
 
+  String get servingLabel {
+    return selectedServingType == 'takeaway'
+        ? 'Takeaway / Bungkus'
+        : 'Makan di Tempat';
+  }
+
   void createOrder(BuildContext context) {
-    final items = menus.where((menu) => (cart[menu['name']] ?? 0) > 0).toList();
+    final items = widget.menus
+        .where((menu) => (widget.cart[menu['name']] ?? 0) > 0)
+        .toList();
 
     if (items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -67,7 +89,7 @@ class CheckoutPage extends StatelessWidget {
 
     final selectedItems = items.map((menu) {
       final name = menu['name'].toString();
-      final quantity = cart[name] ?? 0;
+      final quantity = widget.cart[name] ?? 0;
       final price = getPrice(menu);
 
       return <String, dynamic>{
@@ -75,26 +97,29 @@ class CheckoutPage extends StatelessWidget {
         'quantity': quantity,
         'price': price,
         'subtotal': price * quantity,
-        'note': notes[name]?.trim() ?? '',
+        'note': widget.notes[name]?.trim() ?? '',
         'icon': menu['icon']?.toString() ?? '🍽️',
       };
     }).toList();
 
+    // Simpan pesanan beserta pilihan penyajian.
     final order = OrderStore.addOrder(
-      canteenNumber: canteenNumber,
+      canteenNumber: widget.canteenNumber,
       items: selectedItems,
       total: calculateTotal(items),
+      servingType: selectedServingType,
     );
 
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => OrderSuccessPage(
-          cart: cart,
-          menus: menus,
-          canteenNumber: canteenNumber,
-          notes: Map<String, String>.from(notes),
+          cart: Map<String, int>.from(widget.cart),
+          menus: widget.menus,
+          canteenNumber: widget.canteenNumber,
+          notes: Map<String, String>.from(widget.notes),
           orderNumber: order['number'].toString(),
+          servingType: selectedServingType,
         ),
       ),
     );
@@ -102,7 +127,9 @@ class CheckoutPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = menus.where((menu) => (cart[menu['name']] ?? 0) > 0).toList();
+    final items = widget.menus
+        .where((menu) => (widget.cart[menu['name']] ?? 0) > 0)
+        .toList();
 
     return Scaffold(
       backgroundColor: background,
@@ -128,6 +155,32 @@ class CheckoutPage extends StatelessWidget {
               children: [
                 buildCanteenCard(),
                 const SizedBox(height: 22),
+
+                // Pilihan jenis penyajian.
+                const Text(
+                  'Jenis Penyajian',
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.bold,
+                    color: darkPurple,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                buildServingOption(
+                  value: 'dine_in',
+                  title: 'Makan di Tempat',
+                  description: 'Makan di area kantin.',
+                  icon: Icons.restaurant,
+                ),
+                const SizedBox(height: 10),
+                buildServingOption(
+                  value: 'takeaway',
+                  title: 'Takeaway / Bungkus',
+                  description: 'Makanan disiapkan dalam kemasan bungkus.',
+                  icon: Icons.shopping_bag_outlined,
+                ),
+
+                const SizedBox(height: 24),
                 const Text(
                   'Detail Pesanan',
                   style: TextStyle(
@@ -141,6 +194,7 @@ class CheckoutPage extends StatelessWidget {
                 const SizedBox(height: 5),
                 buildTotalCard(calculateTotal(items)),
                 const SizedBox(height: 25),
+
                 const Text(
                   'Metode Pembayaran',
                   style: TextStyle(
@@ -154,6 +208,7 @@ class CheckoutPage extends StatelessWidget {
                 const SizedBox(height: 20),
                 buildStatusInfo(),
                 const SizedBox(height: 25),
+
                 SizedBox(
                   width: double.infinity,
                   height: 54,
@@ -178,6 +233,79 @@ class CheckoutPage extends StatelessWidget {
                 const SizedBox(height: 20),
               ],
             ),
+    );
+  }
+
+  Widget buildServingOption({
+    required String value,
+    required String title,
+    required String description,
+    required IconData icon,
+  }) {
+    final selected = selectedServingType == value;
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          selectedServingType = value;
+        });
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? purple : lilac,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: lilac,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(icon, color: purple, size: 25),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: darkPurple,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              selected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+              color: selected ? purple : Colors.grey,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -210,7 +338,7 @@ class CheckoutPage extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                'Kantin $canteenNumber',
+                'Kantin ${widget.canteenNumber}',
                 style: const TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
@@ -226,9 +354,9 @@ class CheckoutPage extends StatelessWidget {
 
   Widget buildCheckoutItem(Map<String, dynamic> menu) {
     final name = menu['name'].toString();
-    final quantity = cart[name] ?? 0;
+    final quantity = widget.cart[name] ?? 0;
     final subtotal = getPrice(menu) * quantity;
-    final note = notes[name]?.trim() ?? '';
+    final note = widget.notes[name]?.trim() ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -410,6 +538,7 @@ class OrderSuccessPage extends StatelessWidget {
   final int canteenNumber;
   final Map<String, String> notes;
   final String orderNumber;
+  final String servingType;
 
   const OrderSuccessPage({
     super.key,
@@ -418,14 +547,26 @@ class OrderSuccessPage extends StatelessWidget {
     required this.canteenNumber,
     required this.notes,
     required this.orderNumber,
+    required this.servingType,
   });
 
   static const Color purple = Color(0xFF9B7DD4);
   static const Color darkPurple = Color(0xFF4A3B63);
   static const Color background = Color(0xFFFFF8FC);
 
+  String get servingLabel {
+    return servingType == 'takeaway' ? 'Takeaway / Bungkus' : 'Makan di Tempat';
+  }
+
+  IconData get servingIcon {
+    return servingType == 'takeaway'
+        ? Icons.shopping_bag_outlined
+        : Icons.restaurant;
+  }
+
   int getPrice(Map<String, dynamic> menu) {
     final digits = menu['price'].toString().replaceAll(RegExp(r'[^0-9]'), '');
+
     return int.tryParse(digits) ?? 0;
   }
 
@@ -510,6 +651,8 @@ class OrderSuccessPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
+
+          // Nomor pesanan.
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -536,6 +679,53 @@ class OrderSuccessPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
+
+          // Jenis penyajian yang dipilih.
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE9DDF8)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEDE5FF),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(servingIcon, color: purple, size: 26),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Jenis Penyajian',
+                        style: TextStyle(fontSize: 13, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        servingLabel,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: darkPurple,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Informasi pembayaran.
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -557,8 +747,7 @@ class OrderSuccessPage extends StatelessWidget {
                       ),
                       SizedBox(height: 5),
                       Text(
-                        'Silakan melakukan pembayaran kepada '
-                        'pengelola kantin.',
+                        'Pembayaran di luar aplikasi',
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -567,8 +756,9 @@ class OrderSuccessPage extends StatelessWidget {
                       ),
                       SizedBox(height: 7),
                       Text(
-                        'Jika transfer, tunjukkan bukti transfer '
-                        'kepada pengelola kantin.',
+                        'Silakan membayar langsung di kantin atau '
+                        'transfer kepada penjual. Jika transfer, '
+                        'tunjukkan bukti transfer kepada pengelola.',
                         style: TextStyle(fontSize: 13, height: 1.5),
                       ),
                     ],
@@ -578,6 +768,8 @@ class OrderSuccessPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
+
+          // Status pesanan.
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -613,6 +805,8 @@ class OrderSuccessPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
+
+          // Informasi kantin.
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -653,6 +847,8 @@ class OrderSuccessPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
+
+          // Detail makanan.
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(18),
@@ -751,6 +947,7 @@ class OrderSuccessPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 25),
+
           SizedBox(
             width: double.infinity,
             height: 54,

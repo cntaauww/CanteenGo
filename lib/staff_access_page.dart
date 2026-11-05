@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'admin/admin_login_page.dart';
-import 'pengelolah/pengelola_dashboard_page.dart';
+import 'pengelolah/pengelola_login_page.dart';
 
 class StaffAccessPage extends StatelessWidget {
   const StaffAccessPage({super.key});
@@ -101,6 +101,7 @@ class StaffAccessPage extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: background,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -121,20 +122,32 @@ class StaffAccessPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
+
                 _canteenOption(
-                  context: sheetContext,
+                  parentContext: context,
+                  sheetContext: sheetContext,
                   title: 'Kantin Nasi',
-                  canteenId: '1',
+                  canteenId: 'nasi',
+                  subtitle: 'Menu nasi dan makanan',
+                  icon: Icons.rice_bowl_rounded,
                 ),
+
                 _canteenOption(
-                  context: sheetContext,
+                  parentContext: context,
+                  sheetContext: sheetContext,
                   title: 'Kantin Mi & Bakso',
-                  canteenId: '2',
+                  canteenId: 'bakso',
+                  subtitle: 'Menu mi dan bakso',
+                  icon: Icons.ramen_dining_rounded,
                 ),
+
                 _canteenOption(
-                  context: sheetContext,
+                  parentContext: context,
+                  sheetContext: sheetContext,
                   title: 'Kantin Minuman',
-                  canteenId: '3',
+                  canteenId: 'minuman',
+                  subtitle: 'Berbagai pilihan minuman',
+                  icon: Icons.local_cafe_rounded,
                 ),
               ],
             ),
@@ -145,32 +158,55 @@ class StaffAccessPage extends StatelessWidget {
   }
 
   Widget _canteenOption({
-    required BuildContext context,
+    required BuildContext parentContext,
+    required BuildContext sheetContext,
     required String title,
     required String canteenId,
+    required String subtitle,
+    required IconData icon,
   }) {
     return Card(
       color: Colors.white,
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFFEDE6F7)),
+      ),
       child: ListTile(
-        leading: const Icon(Icons.store_rounded, color: purple),
-        title: Text(title),
-        trailing: const Icon(Icons.chevron_right_rounded),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+        leading: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEDE6FA),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: purple),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: darkPurple,
+          ),
+        ),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right_rounded, color: purple),
         onTap: () {
-          Navigator.pop(context);
+          // Tutup pilihan kantin terlebih dahulu.
+          Navigator.pop(sheetContext);
 
+          // Buka halaman login, bukan dashboard secara langsung.
           Navigator.push(
-            this.contextForNavigation(context),
+            parentContext,
             MaterialPageRoute(
-              builder: (_) => PengelolaDashboardPage(canteenId: canteenId),
+              builder: (_) => PengelolaLoginPage(canteenId: canteenId),
             ),
           );
         },
       ),
     );
-  }
-
-  BuildContext contextForNavigation(BuildContext context) {
-    return context;
   }
 
   Widget _accessCard({

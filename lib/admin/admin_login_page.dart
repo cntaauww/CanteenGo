@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'admin_system_dashboard_page.dart';
+import '../services/auth_service.dart';
 
 class AdminLoginPage extends StatefulWidget {
   const AdminLoginPage({super.key});
@@ -14,7 +15,7 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
   static const Color darkPurple = Color(0xFF7153A6);
   static const Color background = Color(0xFFFAF8FF);
 
-  final usernameController = TextEditingController();
+  final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
   bool hidePassword = true;
@@ -22,31 +23,57 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
 
   @override
   void dispose() {
-    usernameController.dispose();
+    emailController.dispose();
     passwordController.dispose();
     super.dispose();
   }
 
-  void _login() {
-    final username = usernameController.text.trim();
+  Future<void> _login() async {
+    if (isLoading) return;
+
+    final email = emailController.text.trim();
     final password = passwordController.text;
 
-    // AKUN DEMO SEMENTARA.
-    // Ganti dengan autentikasi Laravel sebelum aplikasi digunakan sungguhan.
-    if (username == 'admin' && password == 'admin123') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AdminSystemDashboardPage()),
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email dan password wajib diisi.')),
       );
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Username atau password tidak sesuai.'),
-        backgroundColor: Colors.redAccent,
-      ),
-    );
+    setState(() => isLoading = true);
+
+    try {
+      final result = await AuthService.instance.login(
+        email: email,
+        password: password,
+      );
+      final data = result['data'];
+      final user = data is Map ? data['user'] : null;
+
+      if (user is! Map ||
+          user['role'] != 'admin' ||
+          user['status_akun'] != 'aktif') {
+        await AuthService.instance.logout();
+        throw Exception('Akun tidak memiliki akses admin sistem.');
+      }
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AdminSystemDashboardPage()),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      final message = error.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+      );
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
   }
 
   @override
@@ -103,12 +130,13 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                   ),
                   const SizedBox(height: 32),
                   TextField(
-                    controller: usernameController,
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
                     decoration: InputDecoration(
-                      labelText: 'Username Admin',
+                      labelText: 'Email Admin',
                       prefixIcon: const Icon(
-                        Icons.person_outline_rounded,
+                        Icons.email_outlined,
                         color: purple,
                       ),
                       filled: true,
@@ -153,11 +181,20 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                   SizedBox(
                     height: 52,
                     child: ElevatedButton.icon(
-                      onPressed: _login,
-                      icon: const Icon(Icons.login_rounded),
-                      label: const Text(
-                        'Masuk ke Dashboard',
-                        style: TextStyle(
+                      onPressed: isLoading ? null : _login,
+                      icon: isLoading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.login_rounded),
+                      label: Text(
+                        isLoading ? 'Memeriksa akun...' : 'Masuk ke Dashboard',
+                        style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
                         ),
@@ -169,36 +206,6 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0EBFF),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Akun Demo untuk Pengujian',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: darkPurple,
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text('Username: admin'),
-                        SizedBox(height: 4),
-                        Text('Password: admin123'),
-                        SizedBox(height: 8),
-                        Text(
-                          'Akun ini hanya untuk prototipe lokal, '
-                          'bukan autentikasi admin yang aman.',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ],
                     ),
                   ),
                 ],

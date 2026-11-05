@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 
 import 'data/menu_store.dart';
@@ -6,7 +7,9 @@ import 'order_page.dart';
 
 import 'profile_page.dart';
 
-import '../data/order_store.dart';
+import 'data/order_store.dart';
+import 'services/student_order_notification_service.dart';
+import 'student_notifications_page.dart';
 
 class HomePage extends StatefulWidget {
   final int canteenNumber;
@@ -37,6 +40,9 @@ class _HomePageState extends State<HomePage> {
   Map<String, int> get cart => OrderStore.cartFor(widget.canteenNumber);
 
   final TextEditingController searchController = TextEditingController();
+
+  final StudentOrderNotificationService _notificationService =
+      StudentOrderNotificationService.instance;
 
   String get canteenName {
     switch (widget.canteenNumber) {
@@ -77,7 +83,54 @@ class _HomePageState extends State<HomePage> {
     super.initState();
 
     menuStore.addListener(_onMenusChanged);
+    _notificationService.unreadCount.addListener(_onUnreadCountChanged);
+    _notificationService.start();
     menuStore.loadMenus(canteenId);
+  }
+
+  void _onUnreadCountChanged() {
+    if (!mounted) return;
+
+    final notifications = _notificationService.notifications.value;
+    if (notifications.isEmpty) return;
+
+    final notification = notifications.first;
+    final status = _statusLabel(notification.currentStatus);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Pesanan ${notification.orderCode}: $status.'),
+          action: SnackBarAction(label: 'Lihat', onPressed: _openNotifications),
+        ),
+      );
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'menunggu_pembayaran':
+        return 'menunggu pembayaran';
+      case 'menunggu_konfirmasi':
+        return 'menunggu konfirmasi';
+      case 'diproses':
+        return 'sedang diproses';
+      case 'siap_diambil':
+        return 'siap diambil';
+      case 'selesai':
+        return 'selesai';
+      case 'dibatalkan':
+        return 'dibatalkan';
+      default:
+        return status.replaceAll('_', ' ');
+    }
+  }
+
+  void _openNotifications() {
+    HapticFeedback.selectionClick();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const StudentNotificationsPage()),
+    );
   }
 
   void _onMenusChanged() {
@@ -170,6 +223,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     menuStore.removeListener(_onMenusChanged);
+    _notificationService.unreadCount.removeListener(_onUnreadCountChanged);
+    _notificationService.stop();
 
     searchController.dispose();
 
@@ -318,20 +373,19 @@ class _HomePageState extends State<HomePage> {
                   ),
 
                   IconButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Belum ada notifikasi baru.'),
+                    onPressed: _openNotifications,
+                    tooltip: 'Notifikasi pesanan',
+                    icon: ValueListenableBuilder<int>(
+                      valueListenable: _notificationService.unreadCount,
+                      builder: (context, count, _) => Badge(
+                        isLabelVisible: count > 0,
+                        label: Text(count > 99 ? '99+' : '$count'),
+                        child: const Icon(
+                          Icons.notifications_none_rounded,
+                          color: purple,
+                          size: 27,
                         ),
-                      );
-                    },
-
-                    icon: const Icon(
-                      Icons.notifications_none_rounded,
-
-                      color: purple,
-
-                      size: 27,
+                      ),
                     ),
                   ),
                 ],

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../data/order_store.dart';
+import '../services/order_api_service.dart';
 
 class DetailOrderPage extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -13,19 +13,127 @@ class DetailOrderPage extends StatefulWidget {
 
 class _DetailOrderPageState extends State<DetailOrderPage> {
   late String status;
-
-  final List<String> statusOptions = [
-    'Menunggu Pembayaran',
-    'Menunggu Konfirmasi',
-    'Diproses',
-    'Siap Diambil',
-    'Selesai',
-  ];
+  bool isLoading = false;
 
   @override
   void initState() {
     super.initState();
     status = widget.order['status']?.toString() ?? 'Menunggu Pembayaran';
+  }
+
+  Future<void> confirmPayment() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Konfirmasi Pembayaran'),
+        content: const Text(
+          'Pastikan bukti pembayaran sudah ditunjukkan dan diperiksa '
+          'langsung. Lanjutkan konfirmasi pembayaran?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Kembali'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Ya, sudah diperiksa'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final orderId = int.tryParse(widget.order['id']?.toString() ?? '');
+
+    if (orderId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ID pesanan tidak ditemukan.')),
+      );
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      await OrderApiService.instance.confirmPayment(orderId: orderId);
+
+      if (!mounted) return;
+
+      setState(() {
+        status = 'Diproses';
+        widget.order['status'] = 'Diproses';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pembayaran berhasil dikonfirmasi!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> markReady() async {
+    final orderId = int.tryParse(widget.order['id']?.toString() ?? '');
+
+    if (orderId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ID pesanan tidak ditemukan.')),
+      );
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    try {
+      await OrderApiService.instance.markOrderReady(orderId: orderId);
+
+      if (!mounted) return;
+
+      setState(() {
+        status = 'Siap Diambil';
+        widget.order['status'] = 'Siap Diambil';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pesanan ditandai siap diambil.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
   }
 
   @override
@@ -83,11 +191,8 @@ class _DetailOrderPageState extends State<DetailOrderPage> {
             const SizedBox(height: 12),
 
             _infoRow('Nomor Pesanan', order['number']?.toString() ?? '-'),
-
             _infoRow('Kantin', order['canteen']?.toString() ?? '-'),
-
             _infoRow('Jenis Pesanan', order['servingType']?.toString() ?? '-'),
-
             _infoRow('Total Pembayaran', 'Rp ${total.toString()}'),
 
             const SizedBox(height: 24),
@@ -103,7 +208,7 @@ class _DetailOrderPageState extends State<DetailOrderPage> {
               const Text('Tidak ada detail menu.')
             else
               ...items.map((item) {
-                final menu = item as Map<String, dynamic>;
+                final menu = Map<String, dynamic>.from(item as Map);
 
                 final String nama =
                     menu['name']?.toString() ??
@@ -148,68 +253,100 @@ class _DetailOrderPageState extends State<DetailOrderPage> {
 
             const SizedBox(height: 12),
 
-            DropdownButtonFormField<String>(
-              value: statusOptions.contains(status)
-                  ? status
-                  : statusOptions.first,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Pilih Status',
-                prefixIcon: Icon(Icons.sync),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: Colors.deepPurple.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.deepPurple),
               ),
-              items: statusOptions.map((item) {
-                return DropdownMenuItem<String>(value: item, child: Text(item));
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() {
-                    status = value;
-                  });
-                }
-              },
+              child: Row(
+                children: [
+                  const Icon(Icons.sync, color: Colors.deepPurple),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      status,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.deepPurple,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             const SizedBox(height: 20),
 
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  final orderNumber = order['number']?.toString() ?? '';
-
-                  if (orderNumber.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Nomor pesanan tidak ditemukan.'),
-                      ),
-                    );
-                    return;
-                  }
-
-                  OrderStore.updateStatus(
-                    orderNumber: orderNumber,
-                    status: status,
-                  );
-
-                  setState(() {
-                    order['status'] = status;
-                  });
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Status diperbarui menjadi: $status'),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.save),
-                label: const Text('Simpan Status'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
+            if (status == 'Menunggu Pembayaran' ||
+                status == 'Menunggu Konfirmasi')
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: isLoading ? null : confirmPayment,
+                  icon: isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.check_circle),
+                  label: Text(
+                    isLoading ? 'Memproses...' : 'Konfirmasi Pembayaran',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                  ),
+                ),
+              )
+            else if (status == 'Diproses')
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: isLoading ? null : markReady,
+                  icon: isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.check_circle),
+                  label: Text(
+                    isLoading ? 'Memproses...' : 'Tandai Siap Diambil',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                  ),
+                ),
+              )
+            else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  status == 'Siap Diambil'
+                      ? 'Pesanan sudah siap diambil mahasiswa.'
+                      : 'Status pesanan: $status.',
+                  textAlign: TextAlign.center,
                 ),
               ),
-            ),
           ],
         ),
       ),

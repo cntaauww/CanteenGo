@@ -4,6 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'admin_canteen_page.dart';
+import '../services/auth_service.dart';
+import 'admin_orders_page.dart';
+import 'admin_sales_charts.dart';
+import 'admin_settings_page.dart';
+import 'admin_users_page.dart';
 
 class AdminSystemDashboardPage extends StatefulWidget {
   const AdminSystemDashboardPage({super.key});
@@ -29,9 +34,27 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
   }
 
   Future<Map<String, dynamic>> _fetchDashboard() async {
+    final token = await AuthService.instance.getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception(
+        'Sesi login admin tidak ditemukan. Silakan login kembali.',
+      );
+    }
+
     final response = await http
-        .get(Uri.parse(apiUrl), headers: {'Accept': 'application/json'})
+        .get(
+          Uri.parse(apiUrl),
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        )
         .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401) {
+      await AuthService.instance.clearToken();
+      throw Exception('Sesi login admin berakhir. Silakan login kembali.');
+    }
 
     if (response.statusCode != 200) {
       throw Exception(
@@ -55,17 +78,31 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
     });
   }
 
-  void _showFeatureMessage(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature belum terhubung ke Laravel.')),
-    );
-  }
-
   void _openCanteenManagement() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const AdminCanteenPage()),
     );
+  }
+
+  Future<void> _logout() async {
+    try {
+      await AuthService.instance.logout();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Logout dari server gagal, sesi lokal tetap dihapus: $error',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    }
   }
 
   @override
@@ -99,9 +136,7 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
           IconButton(
             tooltip: 'Keluar',
             icon: const Icon(Icons.logout_rounded, color: darkPurple),
-            onPressed: () {
-              Navigator.of(context).popUntil((route) => route.isFirst);
-            },
+            onPressed: _logout,
           ),
         ],
       ),
@@ -174,7 +209,13 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
                       final totalPengguna =
                           data?['total_pengguna']?.toString() ?? '—';
 
+                      final totalKantin =
+                          data?['total_kantin']?.toString() ?? '—';
+
                       final totalMenu = data?['total_menu']?.toString() ?? '—';
+
+                      final totalPesanan =
+                          data?['total_pesanan']?.toString() ?? '—';
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,7 +249,11 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
                                   _statCard(
                                     icon: Icons.store_rounded,
                                     title: 'Total Kantin',
-                                    value: '—',
+                                    value: isLoading
+                                        ? '...'
+                                        : hasError
+                                        ? '!'
+                                        : totalKantin,
                                     color: const Color(0xFF39966A),
                                   ),
                                   _statCard(
@@ -224,7 +269,11 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
                                   _statCard(
                                     icon: Icons.receipt_long_rounded,
                                     title: 'Total Pesanan',
-                                    value: '—',
+                                    value: isLoading
+                                        ? '...'
+                                        : hasError
+                                        ? '!'
+                                        : totalPesanan,
                                     color: const Color(0xFF9666C9),
                                   ),
                                 ],
@@ -265,6 +314,17 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
                               ),
                             ),
                           ],
+
+                          if (!isLoading && !hasError && data != null) ...[
+                            AdminSalesCharts(
+                              weeklyData: Map<String, dynamic>.from(
+                                data['grafik_penjualan_mingguan'] as Map,
+                              ),
+                              monthlyData: Map<String, dynamic>.from(
+                                data['perbandingan_penjualan_bulanan'] as Map,
+                              ),
+                            ),
+                          ],
                         ],
                       );
                     },
@@ -289,7 +349,12 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
                     title: 'Manajemen Pengguna',
                     subtitle: 'Kelola akun mahasiswa dan pengelola kantin.',
                     onTap: () {
-                      _showFeatureMessage(context, 'Manajemen Pengguna');
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AdminUsersPage(),
+                        ),
+                      );
                     },
                   ),
 
@@ -307,7 +372,12 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
                     title: 'Monitoring Pesanan',
                     subtitle: 'Pantau pesanan dari seluruh kantin.',
                     onTap: () {
-                      _showFeatureMessage(context, 'Monitoring Pesanan');
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AdminOrdersPage(),
+                        ),
+                      );
                     },
                   ),
 
@@ -317,7 +387,12 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
                     title: 'Pengaturan Sistem',
                     subtitle: 'Pengaturan dan informasi administrasi.',
                     onTap: () {
-                      _showFeatureMessage(context, 'Pengaturan Sistem');
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AdminSettingsPage(),
+                        ),
+                      );
                     },
                   ),
 

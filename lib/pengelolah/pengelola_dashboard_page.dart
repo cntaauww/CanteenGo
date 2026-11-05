@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/menu_store.dart';
 
 import '../data/order_store.dart';
+import 'order_masuk_page.dart';
 
 class PengelolaDashboardPage extends StatefulWidget {
   final String canteenId;
@@ -23,6 +24,8 @@ class _PengelolaDashboardPageState extends State<PengelolaDashboardPage> {
   final MenuStore menuStore = MenuStore.instance;
 
   int selectedIndex = 0;
+
+  int serverOrderCount = 0;
 
   // Filter untuk halaman pesanan.
 
@@ -176,7 +179,19 @@ class _PengelolaDashboardPageState extends State<PengelolaDashboardPage> {
         child: IndexedStack(
           index: selectedIndex,
 
-          children: [_buildDashboard(), _buildMenuPage(), _buildOrdersPage()],
+          children: [
+            _buildDashboard(),
+            _buildMenuPage(),
+            OrderMasukPage(
+              canteenNumber: canteenNumber,
+              embedded: true,
+              onOrdersLoaded: (count) {
+                if (mounted) {
+                  setState(() => serverOrderCount = count);
+                }
+              },
+            ),
+          ],
         ),
       ),
 
@@ -365,7 +380,7 @@ class _PengelolaDashboardPageState extends State<PengelolaDashboardPage> {
               child: _summaryCard(
                 'Pesanan',
 
-                '${orders.length}',
+                '$serverOrderCount',
 
                 Icons.receipt_long_rounded,
 
@@ -714,368 +729,6 @@ class _PengelolaDashboardPageState extends State<PengelolaDashboardPage> {
     );
   }
 
-  // Halaman pesanan dengan filter yang bisa diklik.
-
-  Widget _buildOrdersPage() {
-    final currentOrders = orders.where((order) {
-      final servingType = order['servingType']?.toString() ?? 'dine_in';
-
-      if (selectedOrderFilter == 'Makan di Tempat') {
-        return servingType == 'dine_in';
-      }
-
-      if (selectedOrderFilter == 'Takeaway') {
-        return servingType == 'takeaway';
-      }
-
-      return true;
-    }).toList();
-
-    return ListView(
-      padding: const EdgeInsets.all(20),
-
-      children: [
-        const Text(
-          'Daftar Pesanan',
-
-          style: TextStyle(
-            fontSize: 23,
-
-            fontWeight: FontWeight.bold,
-
-            color: darkPurple,
-          ),
-        ),
-
-        const SizedBox(height: 8),
-
-        const Text(
-          'Pantau dan perbarui status pesanan mahasiswa.',
-
-          style: TextStyle(color: Colors.black54),
-        ),
-
-        const SizedBox(height: 20),
-
-        // Pilihan filter pesanan.
-        Wrap(
-          spacing: 8,
-
-          runSpacing: 8,
-
-          children: ['Semua', 'Makan di Tempat', 'Takeaway'].map((filter) {
-            final isSelected = selectedOrderFilter == filter;
-
-            return ChoiceChip(
-              label: Text(filter),
-
-              selected: isSelected,
-
-              selectedColor: const Color(0xFFE9DDF8),
-
-              backgroundColor: Colors.white,
-
-              labelStyle: TextStyle(
-                color: isSelected ? darkPurple : Colors.black54,
-
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-
-              side: BorderSide(
-                color: isSelected ? purple : const Color(0xFFF0E5F5),
-              ),
-
-              onSelected: (selected) {
-                setState(() {
-                  selectedOrderFilter = filter;
-                });
-              },
-            );
-          }).toList(),
-        ),
-
-        const SizedBox(height: 20),
-
-        Text(
-          '${currentOrders.length} pesanan',
-
-          style: const TextStyle(
-            color: darkPurple,
-
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        if (currentOrders.isEmpty)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.receipt_long_outlined,
-
-                    size: 48,
-
-                    color: Colors.black26,
-                  ),
-
-                  SizedBox(height: 12),
-
-                  Text(
-                    'Belum ada pesanan untuk filter ini.',
-
-                    textAlign: TextAlign.center,
-
-                    style: TextStyle(color: Colors.black54),
-                  ),
-                ],
-              ),
-            ),
-          )
-        else
-          ...currentOrders.map(_orderCard),
-      ],
-    );
-  }
-
-  Widget _orderCard(Map<String, dynamic> order) {
-    final orderNumber = order['number']?.toString() ?? '-';
-
-    final status = order['status']?.toString() ?? 'Menunggu Pembayaran';
-
-    final items = (order['items'] as List?) ?? [];
-
-    final servingType = order['servingType']?.toString() ?? 'dine_in';
-
-    final servingLabel = servingType == 'takeaway'
-        ? 'Takeaway / Bungkus'
-        : 'Makan di Tempat';
-
-    final total = (order['total'] as num?)?.toInt() ?? 0;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-
-      padding: const EdgeInsets.all(17),
-
-      decoration: BoxDecoration(
-        color: Colors.white,
-
-        borderRadius: BorderRadius.circular(20),
-
-        border: Border.all(color: const Color(0xFFF0E5F5)),
-      ),
-
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.receipt_long_rounded, color: purple),
-
-              const SizedBox(width: 8),
-
-              Expanded(
-                child: Text(
-                  orderNumber,
-
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-
-                    color: darkPurple,
-                  ),
-                ),
-              ),
-
-              Flexible(child: _statusBadge(status)),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          Row(
-            children: [
-              Icon(
-                servingType == 'takeaway'
-                    ? Icons.takeout_dining_rounded
-                    : Icons.restaurant_rounded,
-
-                color: purple,
-
-                size: 20,
-              ),
-
-              const SizedBox(width: 8),
-
-              Expanded(
-                child: Text(
-                  servingLabel,
-
-                  style: const TextStyle(
-                    color: darkPurple,
-
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const Divider(height: 24),
-
-          if (items.isEmpty)
-            const Text('Detail menu tidak tersedia.')
-          else
-            ...items.map((item) {
-              final name = item['name']?.toString() ?? 'Menu';
-
-              final quantity = item['quantity'] ?? 0;
-
-              final note = item['note']?.toString().trim() ?? '';
-
-              final subtotal = (item['subtotal'] as num?)?.toInt() ?? 0;
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '$name × $quantity',
-
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-
-                              color: darkPurple,
-                            ),
-                          ),
-                        ),
-
-                        Text(_formatRupiah(subtotal)),
-                      ],
-                    ),
-
-                    if (note.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-
-                        child: Text(
-                          'Catatan: $note',
-
-                          style: const TextStyle(
-                            color: Colors.black54,
-
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              );
-            }),
-
-          const Divider(height: 24),
-
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Total Pesanan',
-
-                  style: TextStyle(
-                    color: darkPurple,
-
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-
-              Text(
-                _formatRupiah(total),
-
-                style: const TextStyle(
-                  color: Color(0xFFE85D9E),
-
-                  fontWeight: FontWeight.bold,
-
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          const Text(
-            'Pembayaran dilakukan di luar aplikasi.',
-
-            style: TextStyle(color: Colors.black54, fontSize: 12),
-          ),
-
-          const SizedBox(height: 14),
-
-          SizedBox(
-            width: double.infinity,
-
-            child: OutlinedButton.icon(
-              onPressed: () => _updateOrderStatus(order),
-
-              icon: const Icon(Icons.edit_note_rounded),
-
-              label: const Text('Perbarui Status'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statusBadge(String status) {
-    final Color color = status == 'Selesai'
-        ? Colors.green
-        : status == 'Diproses'
-        ? Colors.orange
-        : status == 'Dibatalkan'
-        ? Colors.red
-        : purple;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-
-        borderRadius: BorderRadius.circular(20),
-      ),
-
-      child: Text(
-        status,
-
-        textAlign: TextAlign.center,
-
-        style: TextStyle(
-          color: color,
-
-          fontSize: 11,
-
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
   Future<void> _showAddMenuDialog() async {
     final nameController = TextEditingController();
 
@@ -1359,48 +1012,6 @@ class _PengelolaDashboardPageState extends State<PengelolaDashboardPage> {
         _showMessage('Menu tidak ditemukan.');
       }
     }
-  }
-
-  Future<void> _updateOrderStatus(Map<String, dynamic> order) async {
-    final currentStatus = order['status']?.toString() ?? 'Menunggu Pembayaran';
-
-    const statuses = <String>[
-      'Menunggu Pembayaran',
-
-      'Menunggu Konfirmasi Pengelola',
-
-      'Diproses',
-
-      'Siap Diambil',
-
-      'Selesai',
-
-      'Dibatalkan',
-    ];
-
-    final nextStatus = await showDialog<String>(
-      context: context,
-
-      builder: (dialogContext) => SimpleDialog(
-        title: Text('Status ${order['number'] ?? ''}'),
-
-        children: statuses.map((status) {
-          return SimpleDialogOption(
-            onPressed: () => Navigator.pop(dialogContext, status),
-
-            child: Text(status == currentStatus ? '✓ $status' : status),
-          );
-        }).toList(),
-      ),
-    );
-
-    if (nextStatus == null || !mounted) return;
-
-    setState(() {
-      order['status'] = nextStatus;
-    });
-
-    _showMessage('Status pesanan diperbarui: $nextStatus');
   }
 
   void _showMessage(String message) {

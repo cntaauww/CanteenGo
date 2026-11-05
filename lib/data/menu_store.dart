@@ -171,13 +171,41 @@ class MenuStore extends ChangeNotifier {
     ],
   };
 
-  // Memuat menu dari Laravel dan mempertahankan gambar serta ikon lokal.
-  Future<void> loadMenus(String canteenId) async {
+  int _toInt(dynamic value, {int fallback = 0}) {
+    if (value is num) return value.toInt();
+
+    final text = value?.toString().trim() ?? '';
+    return int.tryParse(text) ?? double.tryParse(text)?.toInt() ?? fallback;
+  }
+
+  bool _toBool(dynamic value, {bool fallback = true}) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+
+    final text = value?.toString().trim().toLowerCase();
+
+    if (text == 'true' || text == '1') return true;
+    if (text == 'false' || text == '0') return false;
+
+    return fallback;
+  }
+
+  String _normalizeName(dynamic value) {
+    return value?.toString().trim().toLowerCase() ?? '';
+  }
+
+  /// Memuat menu Laravel tanpa menghilangkan gambar dan ikon lokal.
+  ///
+  /// Menu lokal yang cocok diperbarui datanya. Menu dari server yang belum
+  /// ada di daftar lokal ditambahkan ke daftar.
+  Future<void> loadMenus(String canteenId, {bool forceRefresh = false}) async {
     final canteenNumber = _canteenNumbers[canteenId];
 
-    if (canteenNumber == null ||
-        _loadingCanteens.contains(canteenId) ||
-        _loadedCanteens.contains(canteenId)) {
+    if (canteenNumber == null || _loadingCanteens.contains(canteenId)) {
+      return;
+    }
+
+    if (_loadedCanteens.contains(canteenId) && !forceRefresh) {
       return;
     }
 
@@ -192,71 +220,81 @@ class MenuStore extends ChangeNotifier {
 
       for (final serverMenu in serverMenus) {
         final name = serverMenu['nama_menu']?.toString().trim() ?? '';
+        final serverId = _toInt(serverMenu['id']);
 
-        if (name.isEmpty) continue;
+        if (name.isEmpty || serverId <= 0) continue;
 
         final index = localMenus.indexWhere(
-          (menu) =>
-              menu['name']?.toString().trim().toLowerCase() ==
-              name.toLowerCase(),
+          (menu) => _normalizeName(menu['name']) == _normalizeName(name),
         );
 
-        final rawPrice = serverMenu['harga'];
-        final price = rawPrice is num
-            ? rawPrice.toInt()
-            : (double.tryParse(rawPrice?.toString() ?? '') ?? 0).toInt();
-
-        final rawStock = serverMenu['stok'];
-        final stock = rawStock is num
-            ? rawStock.toInt()
-            : int.tryParse(rawStock?.toString() ?? '') ?? 0;
-
-        final rawAvailable = serverMenu['tersedia'];
-        final available =
-            rawAvailable == true ||
-            rawAvailable == 1 ||
-            rawAvailable?.toString() == '1' ||
-            rawAvailable?.toString().toLowerCase() == 'true';
+        final price = _toInt(serverMenu['harga']);
+        final stock = _toInt(serverMenu['stok']);
+        final available = _toBool(serverMenu['tersedia'], fallback: stock > 0);
 
         if (index >= 0) {
+          // Pertahankan gambar, ikon, dan properti lokal lainnya.
           localMenus[index] = {
             ...localMenus[index],
+            'name': name,
             'price': price,
             'stock': stock,
             'available': available,
-            'serverId': serverMenu['id'],
+            'serverId': serverId,
           };
         } else {
+          // Menu baru dari Laravel tetap ditampilkan.
           localMenus.add({
             'name': name,
             'price': price,
             'stock': stock,
             'available': available,
-            'icon': '🍜',
+            'icon': canteenId == 'nasi'
+                ? '🍚'
+                : canteenId == 'minuman'
+                ? '🥤'
+                : '🍜',
             'image': canteenId == 'bakso' ? 'assets/images/bakso.jpg' : '',
-            'serverId': serverMenu['id'],
+            'serverId': serverId,
           });
         }
       }
 
       _loadedCanteens.add(canteenId);
+
+      debugPrint(
+        'Menu Kantin $canteenNumber berhasil dimuat: '
+        '${localMenus.map((menu) => {'name': menu['name'], 'serverId': menu['serverId'], 'price': menu['price']}).toList()}',
+      );
+
       notifyListeners();
-    } catch (error) {
+    } catch (error, stackTrace) {
       debugPrint('Gagal memuat menu $canteenId dari Laravel: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
+      // Jangan tandai sudah dimuat jika permintaan API gagal.
+      _loadedCanteens.remove(canteenId);
     } finally {
       _loadingCanteens.remove(canteenId);
     }
   }
 
+  /// Memaksa pemuatan ulang dari Laravel.
+  Future<void> refreshMenus(String canteenId) async {
+    _loadedCanteens.remove(canteenId);
+    await loadMenus(canteenId, forceRefresh: true);
+  }
+
   List<Map<String, dynamic>> getMenus(String canteenId) {
     return List<Map<String, dynamic>>.unmodifiable(
       (_menus[canteenId] ?? []).map(
-        (menu) => Map<String, dynamic>.unmodifiable(menu),
+        (menu) =>
+            Map<String, dynamic>.unmodifiable(Map<String, dynamic>.from(menu)),
       ),
     );
   }
 
-  // Menambahkan menu ke database sebelum memperbarui tampilan.
+  /// Menambahkan menu ke Laravel sebelum memperbarui daftar lokal.
   Future<void> addMenu(String canteenId, Map<String, dynamic> menu) async {
     final canteenNumber = _canteenNumbers[canteenId];
 
@@ -278,14 +316,24 @@ class MenuStore extends ChangeNotifier {
     final savedMenu = Map<String, dynamic>.from(menu);
     savedMenu['serverId'] = serverMenu['id'];
 
+    // Gunakan data resmi dari server jika tersedia.
+    savedMenu['name'] =
+        serverMenu['nama_menu']?.toString() ?? savedMenu['name'];
+    savedMenu['price'] = _toInt(serverMenu['harga'] ?? savedMenu['price']);
+    savedMenu['stock'] = _toInt(serverMenu['stok'] ?? savedMenu['stock']);
+    savedMenu['available'] = _toBool(
+      serverMenu['tersedia'] ?? savedMenu['available'],
+    );
+
     final list = _menus.putIfAbsent(canteenId, () => []);
     list.add(savedMenu);
 
+    _loadedCanteens.add(canteenId);
     notifyListeners();
   }
 
-  // Memperbarui menu di database.
-  // Jika menu lokal belum mempunyai ID server, menu akan dibuat di Laravel.
+  /// Memperbarui menu di Laravel.
+  /// Menu lokal tanpa ID server akan dibuat sebagai menu baru.
   Future<void> updateMenu(
     String canteenId,
     int index,
@@ -307,14 +355,14 @@ class MenuStore extends ChangeNotifier {
     final payload = Map<String, dynamic>.from(updatedMenu);
     final serverId = currentMenu['serverId'];
 
-    if (serverId != null) {
+    if (serverId != null && _toInt(serverId) > 0) {
       await _menuApiService.updateMenu(
-        id: int.parse(serverId.toString()),
+        id: _toInt(serverId),
         canteenNumber: canteenNumber,
         menu: payload,
       );
 
-      payload['serverId'] = serverId;
+      payload['serverId'] = _toInt(serverId);
     } else {
       final result = await _menuApiService.createMenu(
         canteenNumber: canteenNumber,
@@ -335,7 +383,7 @@ class MenuStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Menghapus menu dari database, kemudian dari daftar lokal.
+  /// Menghapus menu dari Laravel, lalu menghapusnya dari daftar lokal.
   Future<void> deleteMenu(String canteenId, int index) async {
     final list = _menus[canteenId];
 
@@ -345,15 +393,15 @@ class MenuStore extends ChangeNotifier {
 
     final serverId = list[index]['serverId'];
 
-    if (serverId != null) {
-      await _menuApiService.deleteMenu(int.parse(serverId.toString()));
+    if (serverId != null && _toInt(serverId) > 0) {
+      await _menuApiService.deleteMenu(_toInt(serverId));
     }
 
     list.removeAt(index);
     notifyListeners();
   }
 
-  // Mengubah status ketersediaan menu.
+  /// Mengubah status ketersediaan menu.
   Future<void> setAvailability(
     String canteenId,
     int index,
@@ -371,7 +419,7 @@ class MenuStore extends ChangeNotifier {
     await updateMenu(canteenId, index, updatedMenu);
   }
 
-  // Mengubah stok menu.
+  /// Mengubah stok menu.
   Future<void> setStock(String canteenId, int index, int stock) async {
     final list = _menus[canteenId];
 

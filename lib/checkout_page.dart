@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'data/order_store.dart';
+import 'mahasiswa_login_page.dart';
 import 'order_status_page.dart';
+import 'services/auth_service.dart';
+import 'services/menu_api_service.dart';
+import 'services/order_api_service.dart';
 
 class CheckoutPage extends StatefulWidget {
   final Map<String, int> cart;
@@ -32,12 +35,25 @@ class _CheckoutPageState extends State<CheckoutPage> {
   static const Color lilac = CheckoutPage.lilac;
   static const Color background = CheckoutPage.background;
 
-  // Pilihan penyajian awal.
   String selectedServingType = 'dine_in';
+  bool isCreatingOrder = false;
 
+  // Membaca harga dari API (15000.00), angka biasa (15000),
+  // atau harga tampilan (Rp15.000).
   int getPrice(Map<String, dynamic> menu) {
-    final digits = menu['price'].toString().replaceAll(RegExp(r'[^0-9]'), '');
+    final dynamic rawPrice = menu['price'];
 
+    if (rawPrice == null) return 0;
+    if (rawPrice is num) return rawPrice.round();
+
+    final value = rawPrice.toString().trim();
+
+    final decimalValue = double.tryParse(value);
+    if (decimalValue != null) {
+      return decimalValue.round();
+    }
+
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
     return int.tryParse(digits) ?? 0;
   }
 
@@ -75,7 +91,29 @@ class _CheckoutPageState extends State<CheckoutPage> {
         : 'Makan di Tempat';
   }
 
-  void createOrder(BuildContext context) {
+  Future<void> createOrder(BuildContext context) async {
+    if (isCreatingOrder) return;
+
+    // Periksa login terlebih dahulu.
+    final token = await AuthService.instance.getToken();
+
+    if (!context.mounted) return;
+
+    if (token == null || token.isEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MahasiswaLoginPage(
+            cart: Map<String, int>.from(widget.cart),
+            menus: List<Map<String, dynamic>>.from(widget.menus),
+            canteenNumber: widget.canteenNumber,
+            notes: Map<String, String>.from(widget.notes),
+          ),
+        ),
+      );
+      return;
+    }
+
     final items = widget.menus
         .where((menu) => (widget.cart[menu['name']] ?? 0) > 0)
         .toList();
@@ -87,42 +125,114 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
-    final selectedItems = items.map((menu) {
-      final name = menu['name'].toString();
-      final quantity = widget.cart[name] ?? 0;
-      final price = getPrice(menu);
+    setState(() {
+      isCreatingOrder = true;
+    });
 
-      return <String, dynamic>{
-        'name': name,
-        'quantity': quantity,
-        'price': price,
-        'subtotal': price * quantity,
-        'note': widget.notes[name]?.trim() ?? '',
-        'icon': menu['icon']?.toString() ?? '🍽️',
-      };
-    }).toList();
+    try {
+      // Cart entries can outlive the menu snapshot passed to this page.
+      // Resolve IDs from Laravel so stale/local menu data cannot block checkout.
+      final serverMenus = await MenuApiService().getMenus(
+        canteenNumber: widget.canteenNumber,
+      );
 
-    // Simpan pesanan beserta pilihan penyajian.
-    final order = OrderStore.addOrder(
-      canteenNumber: widget.canteenNumber,
-      items: selectedItems,
-      total: calculateTotal(items),
-      servingType: selectedServingType,
-    );
+      if (!context.mounted) return;
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => OrderSuccessPage(
-          cart: Map<String, int>.from(widget.cart),
-          menus: widget.menus,
-          canteenNumber: widget.canteenNumber,
-          notes: Map<String, String>.from(widget.notes),
-          orderNumber: order['number'].toString(),
-          servingType: selectedServingType,
+      final serverMenuIds = <String, int>{};
+      for (final serverMenu in serverMenus) {
+        final name = serverMenu['nama_menu']?.toString().trim() ?? '';
+        final menuId = int.tryParse(serverMenu['id']?.toString() ?? '');
+
+        if (name.isNotEmpty && menuId != null && menuId > 0) {
+          serverMenuIds[name.toLowerCase()] = menuId;
+        }
+      }
+
+      final apiItems = <Map<String, int>>[];
+      for (final menu in items) {
+        final name = menu['name'].toString().trim();
+        final menuId = serverMenuIds[name.toLowerCase()];
+        final quantity = widget.cart[menu['name']] ?? 0;
+
+        if (menuId == null) {
+          throw Exception(
+            'Menu "$name" tidak ditemukan di server. '
+            'Kembali ke halaman menu, muat ulang, lalu coba lagi.',
+          );
+        }
+
+        if (quantity > 0) {
+          apiItems.add({'menu_id': menuId, 'jumlah': quantity});
+        }
+      }
+
+      if (apiItems.isEmpty) {
+        throw Exception('Tidak ada menu valid untuk dipesan.');
+      }
+
+      // Gabungkan catatan masing-masing menu menjadi satu catatan pesanan.
+      final notesList = <String>[];
+
+      for (final menu in items) {
+        final name = menu['name'].toString();
+        final note = widget.notes[name]?.trim() ?? '';
+
+        if (note.isNotEmpty) {
+          notesList.add('$name: $note');
+        }
+      }
+
+      final combinedNotes = notesList.isEmpty ? null : notesList.join('\n');
+      final orderData = await OrderApiService.instance.createOrder(
+        canteenNumber: widget.canteenNumber,
+        servingType: selectedServingType,
+        items: apiItems,
+        notes: combinedNotes,
+      );
+
+      if (!context.mounted) return;
+
+      final orderNumber = orderData['kode_pesanan']?.toString();
+
+      if (orderNumber == null || orderNumber.isEmpty) {
+        throw Exception('Kode pesanan dari server tidak ditemukan.');
+      }
+
+      // Simpan salinan detail pesanan untuk halaman sukses.
+      final orderedCart = Map<String, int>.from(widget.cart);
+
+      // Kosongkan keranjang aktif agar pesanan yang sudah dibuat
+      // tidak muncul lagi sebagai item keranjang baru.
+      widget.cart.clear();
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OrderSuccessPage(
+            cart: orderedCart,
+            menus: widget.menus,
+            canteenNumber: widget.canteenNumber,
+            notes: Map<String, String>.from(widget.notes),
+            orderNumber: orderNumber,
+            servingType: selectedServingType,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+
+      final message = e.toString().replaceFirst('Exception: ', '');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), duration: const Duration(seconds: 4)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isCreatingOrder = false;
+        });
+      }
+    }
   }
 
   @override
@@ -155,8 +265,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
               children: [
                 buildCanteenCard(),
                 const SizedBox(height: 22),
-
-                // Pilihan jenis penyajian.
                 const Text(
                   'Jenis Penyajian',
                   style: TextStyle(
@@ -179,7 +287,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   description: 'Makanan disiapkan dalam kemasan bungkus.',
                   icon: Icons.shopping_bag_outlined,
                 ),
-
                 const SizedBox(height: 24),
                 const Text(
                   'Detail Pesanan',
@@ -194,7 +301,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 const SizedBox(height: 5),
                 buildTotalCard(calculateTotal(items)),
                 const SizedBox(height: 25),
-
                 const Text(
                   'Metode Pembayaran',
                   style: TextStyle(
@@ -208,26 +314,37 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 const SizedBox(height: 20),
                 buildStatusInfo(),
                 const SizedBox(height: 25),
-
                 SizedBox(
                   width: double.infinity,
                   height: 54,
                   child: ElevatedButton(
-                    onPressed: () => createOrder(context),
+                    onPressed: isCreatingOrder
+                        ? null
+                        : () => createOrder(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: purple,
                       foregroundColor: Colors.white,
+                      disabledBackgroundColor: lilac,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15),
                       ),
                     ),
-                    child: const Text(
-                      'Buat Pesanan',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    child: isCreatingOrder
+                        ? const SizedBox(
+                            width: 23,
+                            height: 23,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Buat Pesanan',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -245,11 +362,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final selected = selectedServingType == value;
 
     return InkWell(
-      onTap: () {
-        setState(() {
-          selectedServingType = value;
-        });
-      },
+      onTap: isCreatingOrder
+          ? null
+          : () {
+              setState(() {
+                selectedServingType = value;
+              });
+            },
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -397,7 +516,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  '${menu['price']} x $quantity',
+                  '${formatRupiah(getPrice(menu))} x $quantity',
                   style: const TextStyle(fontSize: 13, color: Colors.grey),
                 ),
                 if (note.isNotEmpty) ...[
@@ -565,8 +684,19 @@ class OrderSuccessPage extends StatelessWidget {
   }
 
   int getPrice(Map<String, dynamic> menu) {
-    final digits = menu['price'].toString().replaceAll(RegExp(r'[^0-9]'), '');
+    final dynamic rawPrice = menu['price'];
 
+    if (rawPrice == null) return 0;
+    if (rawPrice is num) return rawPrice.round();
+
+    final value = rawPrice.toString().trim();
+    final decimalValue = double.tryParse(value);
+
+    if (decimalValue != null) {
+      return decimalValue.round();
+    }
+
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
     return int.tryParse(digits) ?? 0;
   }
 
@@ -651,8 +781,6 @@ class OrderSuccessPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
-
-          // Nomor pesanan.
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -679,8 +807,6 @@ class OrderSuccessPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-
-          // Jenis penyajian yang dipilih.
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -724,8 +850,6 @@ class OrderSuccessPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-
-          // Informasi pembayaran.
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -768,8 +892,6 @@ class OrderSuccessPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-
-          // Status pesanan.
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -805,8 +927,6 @@ class OrderSuccessPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-
-          // Informasi kantin.
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -847,8 +967,6 @@ class OrderSuccessPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-
-          // Detail makanan.
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(18),
@@ -947,7 +1065,6 @@ class OrderSuccessPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 25),
-
           SizedBox(
             width: double.infinity,
             height: 54,

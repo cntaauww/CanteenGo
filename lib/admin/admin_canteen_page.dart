@@ -25,32 +25,50 @@ class _AdminCanteenPageState extends State<AdminCanteenPage> {
   }
 
   Future<void> fetchMenus() async {
+    if (!mounted) return;
+
     setState(() {
       isLoading = true;
       errorMessage = null;
     });
 
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/menus?nomor_kantin=$selectedCanteen'),
-      );
+      final uri = Uri.parse('$baseUrl/menus?nomor_kantin=$selectedCanteen');
+
+      final response = await http.get(uri);
+
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
-        final result = jsonDecode(response.body);
+        final dynamic result = jsonDecode(response.body);
 
-        setState(() {
-          menus = result['data'] ?? [];
-        });
+        if (result is Map && result['data'] is List) {
+          setState(() {
+            menus = List<dynamic>.from(result['data'] as List);
+          });
+        } else {
+          setState(() {
+            menus = [];
+            errorMessage = 'Format data menu dari Laravel tidak sesuai.';
+          });
+        }
       } else {
         setState(() {
-          errorMessage = 'Gagal mengambil data menu (${response.statusCode}).';
+          menus = [];
+          errorMessage = 'Gagal mengambil menu (HTTP ${response.statusCode}).';
         });
       }
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
+        menus = [];
         errorMessage =
-            'Tidak dapat terhubung ke Laravel. Pastikan server aktif.';
+            'Tidak dapat terhubung ke Laravel. '
+            'Pastikan server dan database aktif.';
       });
+
+      debugPrint('Kesalahan mengambil menu: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -58,6 +76,39 @@ class _AdminCanteenPageState extends State<AdminCanteenPage> {
         });
       }
     }
+  }
+
+  int toInt(dynamic value) {
+    if (value is num) return value.toInt();
+
+    return int.tryParse(value?.toString() ?? '') ??
+        double.tryParse(value?.toString() ?? '')?.toInt() ??
+        0;
+  }
+
+  bool toBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+
+    final text = value?.toString().toLowerCase();
+    return text == '1' || text == 'true';
+  }
+
+  String formatRupiah(dynamic value) {
+    final number = toInt(value);
+    final digits = number.toString();
+    final buffer = StringBuffer();
+
+    for (int i = 0; i < digits.length; i++) {
+      buffer.write(digits[i]);
+
+      final remaining = digits.length - i - 1;
+      if (remaining > 0 && remaining % 3 == 0) {
+        buffer.write('.');
+      }
+    }
+
+    return 'Rp$buffer';
   }
 
   @override
@@ -69,7 +120,7 @@ class _AdminCanteenPageState extends State<AdminCanteenPage> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            onPressed: fetchMenus,
+            onPressed: isLoading ? null : fetchMenus,
             icon: const Icon(Icons.refresh),
             tooltip: 'Muat ulang',
           ),
@@ -91,15 +142,18 @@ class _AdminCanteenPageState extends State<AdminCanteenPage> {
                   child: Text('Kantin $number'),
                 );
               }).toList(),
-              onChanged: (value) {
-                if (value == null) return;
+              onChanged: isLoading
+                  ? null
+                  : (value) {
+                      if (value == null) return;
 
-                setState(() {
-                  selectedCanteen = value;
-                });
+                      setState(() {
+                        selectedCanteen = value;
+                        menus = [];
+                      });
 
-                fetchMenus();
-              },
+                      fetchMenus();
+                    },
             ),
           ),
           Expanded(
@@ -129,10 +183,28 @@ class _AdminCanteenPageState extends State<AdminCanteenPage> {
                     ),
                   )
                 : menus.isEmpty
-                ? const Center(
-                    child: Text(
-                      'Belum ada menu untuk kantin ini.',
-                      textAlign: TextAlign.center,
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.restaurant_menu,
+                          size: 48,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Belum ada menu di Kantin '
+                          '$selectedCanteen.',
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: fetchMenus,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Muat Ulang'),
+                        ),
+                      ],
                     ),
                   )
                 : ListView.builder(
@@ -143,10 +215,9 @@ class _AdminCanteenPageState extends State<AdminCanteenPage> {
 
                       final nama =
                           menu['nama_menu']?.toString() ?? 'Tanpa nama';
-                      final harga = menu['harga']?.toString() ?? '0';
-                      final stok = menu['stok']?.toString() ?? '0';
-                      final tersedia =
-                          menu['tersedia'] == true || menu['tersedia'] == 1;
+                      final harga = formatRupiah(menu['harga']);
+                      final stok = toInt(menu['stok']);
+                      final tersedia = toBool(menu['tersedia']);
 
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
@@ -163,7 +234,7 @@ class _AdminCanteenPageState extends State<AdminCanteenPage> {
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(
-                            'Harga: Rp$harga\n'
+                            'Harga: $harga\n'
                             'Stok: $stok\n'
                             'Status: ${tersedia ? 'Tersedia' : 'Tidak tersedia'}',
                           ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'checkout_page.dart';
 import 'data/order_store.dart';
 import 'order_status_page.dart';
+import 'services/order_api_service.dart';
 
 class OrderPage extends StatefulWidget {
   final Map<String, int> cart;
@@ -30,20 +31,30 @@ class _OrderPageState extends State<OrderPage> {
   final Map<String, String> notes = {};
   final Map<String, TextEditingController> controllers = {};
 
+  bool isLoading = true;
+  String? loadError;
+  List<Map<String, dynamic>> serverOrders = [];
+
+  static const Set<String> activeStatuses = {
+    'menunggu_pembayaran',
+    'menunggu_konfirmasi',
+    'diproses',
+    'siap_diambil',
+  };
+
   @override
   void initState() {
     super.initState();
     OrderStore.revision.addListener(refreshOrders);
+    loadOrders();
   }
 
   @override
   void dispose() {
     OrderStore.revision.removeListener(refreshOrders);
-
     for (final controller in controllers.values) {
       controller.dispose();
     }
-
     super.dispose();
   }
 
@@ -51,13 +62,42 @@ class _OrderPageState extends State<OrderPage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> loadOrders() async {
+    try {
+      final orders = await OrderApiService.instance.getOrders();
+      if (!mounted) return;
+
+      setState(() {
+        serverOrders = orders;
+        loadError = null;
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        loadError = e.toString().replaceFirst('Exception: ', '');
+        isLoading = false;
+      });
+    }
+  }
+
   TextEditingController getController(String name) {
     return controllers.putIfAbsent(name, () => TextEditingController());
   }
 
   int parsePrice(dynamic price) {
-    return int.tryParse(price.toString().replaceAll(RegExp(r'[^0-9]'), '')) ??
-        0;
+    if (price == null) return 0;
+    if (price is num) return price.round();
+
+    final value = price.toString().trim();
+
+    // Harga API Laravel seperti "15000.00" harus dibaca sebagai 15000.
+    final decimalValue = double.tryParse(value);
+    if (decimalValue != null) return decimalValue.round();
+
+    // Harga tampilan seperti "Rp15.000".
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    return int.tryParse(digits) ?? 0;
   }
 
   String formatRupiah(int number) {
@@ -68,61 +108,129 @@ class _OrderPageState extends State<OrderPage> {
     for (int i = value.length - 1; i >= 0; i--) {
       result.write(value[i]);
       count++;
-
       if (count == 3 && i != 0) {
         result.write('.');
         count = 0;
       }
     }
-
     return 'Rp${result.toString().split('').reversed.join()}';
+  }
+
+  String readableStatus(dynamic rawStatus) {
+    switch (rawStatus?.toString().toLowerCase()) {
+      case 'menunggu_pembayaran':
+        return 'Menunggu Pembayaran';
+      case 'menunggu_konfirmasi':
+        return 'Menunggu Konfirmasi';
+      case 'diproses':
+        return 'Diproses';
+      case 'siap_diambil':
+        return 'Siap Diambil';
+      case 'selesai':
+        return 'Selesai';
+      default:
+        return rawStatus?.toString() ?? 'Status tidak diketahui';
+    }
+  }
+
+  Map<String, dynamic>? get activeOrder {
+    final orders = serverOrders.where((order) {
+      final canteen = int.tryParse(order['nomor_kantin']?.toString() ?? '');
+      final status = order['status_pesanan']?.toString().toLowerCase();
+
+      return canteen == widget.canteenNumber && activeStatuses.contains(status);
+    }).toList();
+
+    if (orders.isEmpty) return null;
+
+    // Pesanan terbaru berada di urutan pertama dari API Laravel.
+    return orders.first;
+  }
+
+  List<Map<String, dynamic>> get cartItems {
+    return widget.menus
+        .where((menu) => (widget.cart[menu['name']] ?? 0) > 0)
+        .toList();
   }
 
   int calculateTotal(List<Map<String, dynamic>> items) {
     int total = 0;
-
     for (final menu in items) {
       total += parsePrice(menu['price']) * (widget.cart[menu['name']] ?? 0);
     }
-
     return total;
-  }
-
-  Map<String, dynamic>? get latestOrder {
-    return OrderStore.latestOrderForCanteen(widget.canteenNumber);
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = widget.menus
-        .where((menu) => (widget.cart[menu['name']] ?? 0) > 0)
-        .toList();
+    // Keranjang aktif harus diprioritaskan. Pesanan lama dari server
+    // hanya ditampilkan jika keranjang memang kosong.
+    final items = cartItems;
 
-    // Jika keranjang kosong, jangan langsung menganggap
-    // mahasiswa belum mempunyai pesanan.
+    if (items.isEmpty && isLoading) {
+      return Scaffold(
+        backgroundColor: background,
+        appBar: buildAppBar(),
+        body: const Center(child: CircularProgressIndicator(color: purple)),
+      );
+    }
+
+    if (items.isEmpty && loadError != null) {
+      return Scaffold(
+        backgroundColor: background,
+        appBar: buildAppBar(),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off, size: 55, color: purple),
+                const SizedBox(height: 12),
+                const Text(
+                  'Pesanan belum bisa dimuat',
+                  style: TextStyle(
+                    color: darkPurple,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(loadError!, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      isLoading = true;
+                      loadError = null;
+                    });
+                    loadOrders();
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Coba Lagi'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: purple,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Tampilkan pesanan aktif sebelumnya hanya jika tidak ada item baru
+    // di keranjang mahasiswa.
     if (items.isEmpty) {
-      final order = latestOrder;
-
+      final order = activeOrder;
       if (order != null) {
         return buildExistingOrder(order);
       }
 
       return Scaffold(
         backgroundColor: background,
-        appBar: AppBar(
-          backgroundColor: background,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          title: const Text(
-            'Pesanan Saya',
-            style: TextStyle(
-              color: darkPurple,
-              fontWeight: FontWeight.bold,
-              fontSize: 22,
-            ),
-          ),
-          iconTheme: const IconThemeData(color: darkPurple),
-        ),
+        appBar: buildAppBar(),
         body: buildEmptyCart(),
       );
     }
@@ -135,20 +243,7 @@ class _OrderPageState extends State<OrderPage> {
 
     return Scaffold(
       backgroundColor: background,
-      appBar: AppBar(
-        backgroundColor: background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'Pesanan Saya',
-          style: TextStyle(
-            color: darkPurple,
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
-          ),
-        ),
-        iconTheme: const IconThemeData(color: darkPurple),
-      ),
+      appBar: buildAppBar(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [
@@ -198,7 +293,7 @@ class _OrderPageState extends State<OrderPage> {
                       notes: Map<String, String>.from(notes),
                     ),
                   ),
-                );
+                ).then((_) => loadOrders());
               },
               icon: const Icon(Icons.shopping_bag_outlined),
               label: const Text(
@@ -235,26 +330,37 @@ class _OrderPageState extends State<OrderPage> {
     );
   }
 
+  PreferredSizeWidget buildAppBar() {
+    return AppBar(
+      backgroundColor: background,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      title: const Text(
+        'Pesanan Saya',
+        style: TextStyle(
+          color: darkPurple,
+          fontWeight: FontWeight.bold,
+          fontSize: 22,
+        ),
+      ),
+      iconTheme: const IconThemeData(color: darkPurple),
+    );
+  }
+
   Widget buildExistingOrder(Map<String, dynamic> order) {
-    final orderNumber = order['number']?.toString() ?? '-';
-    final status = order['status']?.toString() ?? 'Menunggu Pembayaran';
+    final orderNumber = order['kode_pesanan']?.toString() ?? '-';
+    final status = readableStatus(order['status_pesanan']);
     final items = (order['items'] as List? ?? [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
 
+    final canteen = order['nomor_kantin']?.toString() ?? '-';
+    final total = parsePrice(order['total_harga']);
+
     return Scaffold(
       backgroundColor: background,
-      appBar: AppBar(
-        backgroundColor: background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'Pesanan Saya',
-          style: TextStyle(color: darkPurple, fontWeight: FontWeight.bold),
-        ),
-        iconTheme: const IconThemeData(color: darkPurple),
-      ),
+      appBar: buildAppBar(),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -300,14 +406,14 @@ class _OrderPageState extends State<OrderPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Nomor Antrean',
+                  'Kode Pesanan',
                   style: TextStyle(color: Colors.grey),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   orderNumber,
                   style: const TextStyle(
-                    fontSize: 27,
+                    fontSize: 25,
                     fontWeight: FontWeight.bold,
                     color: darkPurple,
                   ),
@@ -357,7 +463,7 @@ class _OrderPageState extends State<OrderPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Detail Pesanan • Kantin ${order['canteenNumber']}',
+                  'Detail Pesanan • Kantin $canteen',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -366,11 +472,12 @@ class _OrderPageState extends State<OrderPage> {
                 ),
                 const SizedBox(height: 14),
                 ...items.map((item) {
-                  final name = item['name']?.toString() ?? 'Menu';
-                  final quantity =
-                      int.tryParse(item['quantity'].toString()) ?? 0;
-                  final subtotal =
-                      int.tryParse(item['subtotal'].toString()) ?? 0;
+                  final name =
+                      item['nama_menu']?.toString() ??
+                      item['menu']?['nama_menu']?.toString() ??
+                      'Menu';
+                  final quantity = parsePrice(item['jumlah']);
+                  final subtotal = parsePrice(item['subtotal']);
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
@@ -405,9 +512,7 @@ class _OrderPageState extends State<OrderPage> {
                       ),
                     ),
                     Text(
-                      formatRupiah(
-                        int.tryParse(order['total'].toString()) ?? 0,
-                      ),
+                      formatRupiah(total),
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -415,6 +520,11 @@ class _OrderPageState extends State<OrderPage> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Pembayaran dilakukan di luar aplikasi.',
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ],
             ),
@@ -430,7 +540,7 @@ class _OrderPageState extends State<OrderPage> {
                   MaterialPageRoute(
                     builder: (_) => OrderStatusPage(orderNumber: orderNumber),
                   ),
-                );
+                ).then((_) => loadOrders());
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: purple,

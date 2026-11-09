@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../config/api_config.dart';
 import '../services/auth_service.dart';
 
 class AdminSettingsPage extends StatefulWidget {
@@ -15,9 +16,6 @@ class AdminSettingsPage extends StatefulWidget {
 class _AdminSettingsPageState extends State<AdminSettingsPage> {
   static const Color purple = Color(0xFF9B7DD4);
   static const Color darkPurple = Color(0xFF7153A6);
-  static const String dashboardUrl =
-      'http://127.0.0.1:8000/api/admin/dashboard';
-
   late Future<Map<String, dynamic>> _settingsFuture;
 
   @override
@@ -41,7 +39,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
 
     final response = await http
         .get(
-          Uri.parse(dashboardUrl),
+          Uri.parse('${ApiConfig.baseUrl}/admin/dashboard'),
           headers: {
             'Accept': 'application/json',
             'Authorization': 'Bearer $token',

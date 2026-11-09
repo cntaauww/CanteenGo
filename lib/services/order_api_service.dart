@@ -2,14 +2,13 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../config/api_config.dart';
 import 'auth_service.dart';
 
 class OrderApiService {
   OrderApiService._();
 
   static final OrderApiService instance = OrderApiService._();
-
-  static const String _baseUrl = 'http://127.0.0.1:8000/api';
 
   // Membuat pesanan baru melalui Laravel.
   Future<Map<String, dynamic>> createOrder({
@@ -51,7 +50,7 @@ class OrderApiService {
 
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/orders'),
+        Uri.parse('${ApiConfig.baseUrl}/orders'),
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
@@ -149,7 +148,7 @@ class OrderApiService {
 
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl$endpoint'),
+        Uri.parse('${ApiConfig.baseUrl}$endpoint'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
@@ -198,7 +197,7 @@ class OrderApiService {
 
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/orders/$orderId/confirm-payment'),
+        Uri.parse('${ApiConfig.baseUrl}/orders/$orderId/confirm-payment'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
@@ -238,7 +237,7 @@ class OrderApiService {
 
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/orders/$orderId/mark-ready'),
+        Uri.parse('${ApiConfig.baseUrl}/orders/$orderId/mark-ready'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',

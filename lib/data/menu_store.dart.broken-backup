@@ -1,0 +1,65 @@
+Future<void> loadMenus(String canteenId) async {
+  final canteenNumber = _canteenNumbers[canteenId];
+
+  if (canteenNumber == null) {
+    throw ArgumentError('Kategori kantin tidak dikenal: $canteenId');
+  }
+
+  _loading[canteenId] = true;
+  _errors[canteenId] = null;
+  notifyListeners();
+
+  try {
+    final apiMenus = await _menuApiService.getMenus(
+      canteenNumber: canteenNumber,
+    );
+
+    // Simpan data lokal yang sudah ada untuk mempertahankan
+    // gambar dan properti menu yang dipakai oleh UI.
+    final oldMenus = _menus[canteenId] ?? [];
+
+    final oldMenusByName = <String, Map<String, dynamic>>{
+      for (final menu in oldMenus)
+        (menu['name'] ?? '').toString().toLowerCase(): menu,
+    };
+
+    final convertedMenus = apiMenus.map<Map<String, dynamic>>((item) {
+      final name = (item['nama_menu'] ?? '').toString();
+      final oldMenu = oldMenusByName[name.toLowerCase()];
+
+      final price = double.tryParse('${item['harga'] ?? 0}') ?? 0;
+
+      final stock = int.tryParse('${item['stok'] ?? 0}') ?? 0;
+
+      final rawAvailable = item['tersedia'];
+
+      final available =
+          rawAvailable == true ||
+          rawAvailable == 1 ||
+          rawAvailable.toString() == '1' ||
+          rawAvailable.toString().toLowerCase() == 'true';
+
+      return {
+        ...?oldMenu,
+        'id': item['id'],
+        'nomor_kantin': item['nomor_kantin'],
+        'name': name,
+        'description': item['deskripsi'] ?? '',
+        'price': price.toInt(),
+        'stock': stock,
+        'available': available && stock > 0,
+        'photo': item['foto'],
+        'icon': oldMenu?['icon'] ?? '🍽️',
+        'image': oldMenu?['image'],
+      };
+    }).toList();
+
+    _menus[canteenId] = convertedMenus;
+  } catch (e) {
+    _errors[canteenId] = 'Gagal mengambil menu dari server: $e';
+    rethrow;
+  } finally {
+    _loading[canteenId] = false;
+    notifyListeners();
+  }
+}

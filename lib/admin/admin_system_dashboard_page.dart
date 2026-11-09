@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../config/api_config.dart';
 import 'admin_canteen_page.dart';
 import '../services/auth_service.dart';
 import 'admin_orders_page.dart';
@@ -23,8 +24,6 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
   static const Color darkPurple = Color(0xFF7153A6);
   static const Color background = Color(0xFFFAF8FF);
 
-  static const String apiUrl = 'http://127.0.0.1:8000/api/admin/dashboard';
-
   late Future<Map<String, dynamic>> _dashboardFuture;
 
   @override
@@ -43,7 +42,7 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
 
     final response = await http
         .get(
-          Uri.parse(apiUrl),
+          Uri.parse('${ApiConfig.baseUrl}/admin/dashboard'),
           headers: {
             'Accept': 'application/json',
             'Authorization': 'Bearer $token',

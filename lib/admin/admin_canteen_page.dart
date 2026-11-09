@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../config/api_config.dart';
+
 class AdminCanteenPage extends StatefulWidget {
   const AdminCanteenPage({super.key});
 
@@ -15,8 +17,6 @@ class _AdminCanteenPageState extends State<AdminCanteenPage> {
   bool isLoading = false;
   String? errorMessage;
   List<dynamic> menus = [];
-
-  static const String baseUrl = 'http://127.0.0.1:8000/api';
 
   @override
   void initState() {
@@ -33,7 +33,9 @@ class _AdminCanteenPageState extends State<AdminCanteenPage> {
     });
 
     try {
-      final uri = Uri.parse('$baseUrl/menus?nomor_kantin=$selectedCanteen');
+      final uri = Uri.parse(
+        '${ApiConfig.baseUrl}/menus?nomor_kantin=$selectedCanteen',
+      );
 
       final response = await http.get(uri);
 

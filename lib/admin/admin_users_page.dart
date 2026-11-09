@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../config/api_config.dart';
 import '../services/auth_service.dart';
 
 class AdminUsersPage extends StatefulWidget {
@@ -15,8 +16,6 @@ class AdminUsersPage extends StatefulWidget {
 class _AdminUsersPageState extends State<AdminUsersPage> {
   static const Color purple = Color(0xFF9B7DD4);
   static const Color darkPurple = Color(0xFF7153A6);
-  static const String apiUrl = 'http://127.0.0.1:8000/api/admin/users';
-
   List<Map<String, dynamic>> users = [];
   bool isLoading = true;
   String? errorMessage;
@@ -44,7 +43,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
 
       final response = await http
           .get(
-            Uri.parse(apiUrl),
+            Uri.parse('${ApiConfig.baseUrl}/admin/users'),
             headers: {
               'Accept': 'application/json',
               'Authorization': 'Bearer $token',
@@ -122,7 +121,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
 
       final response = await http
           .patch(
-            Uri.parse('$apiUrl/$userId/status'),
+            Uri.parse('${ApiConfig.baseUrl}/admin/users/$userId/status'),
             headers: {
               'Accept': 'application/json',
               'Content-Type': 'application/json',

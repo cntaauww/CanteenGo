@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'config/api_config.dart';
 import 'services/auth_service.dart';
 
 class OrderStatusPage extends StatefulWidget {
@@ -15,8 +16,6 @@ class OrderStatusPage extends StatefulWidget {
 }
 
 class _OrderStatusPageState extends State<OrderStatusPage> {
-  static const String _baseUrl = 'http://127.0.0.1:8000/api';
-
   static const Color purple = Color(0xFF8061C9);
   static const Color darkPurple = Color(0xFF40305F);
   static const Color background = Color(0xFFFAF8FF);
@@ -54,7 +53,7 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
       }
 
       final response = await http.get(
-        Uri.parse('$_baseUrl/orders'),
+        Uri.parse('${ApiConfig.baseUrl}/orders'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',

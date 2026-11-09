@@ -3,12 +3,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/api_config.dart';
+
 class AuthService {
   AuthService._();
 
   static final AuthService instance = AuthService._();
 
-  static const String _baseUrl = 'http://127.0.0.1:8000/api';
   static const String _tokenKey = 'canteengo_token';
   static const String _userKey = 'canteengo_user';
 
@@ -60,7 +61,7 @@ class AuthService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/login'),
+        Uri.parse('${ApiConfig.baseUrl}/login'),
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
@@ -132,7 +133,7 @@ class AuthService {
 
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/profile'),
+        Uri.parse('${ApiConfig.baseUrl}/profile'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
@@ -179,7 +180,7 @@ class AuthService {
     try {
       if (token != null && token.isNotEmpty) {
         await http.post(
-          Uri.parse('$_baseUrl/logout'),
+          Uri.parse('${ApiConfig.baseUrl}/logout'),
           headers: {
             'Accept': 'application/json',
             'Authorization': 'Bearer $token',

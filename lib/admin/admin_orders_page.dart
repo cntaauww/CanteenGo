@@ -102,7 +102,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
   String _formatRupiah(dynamic value) {
     final amount = value is num
         ? value.round()
-        : int.tryParse(value?.toString() ?? '') ?? 0;
+        : num.tryParse(value?.toString() ?? '')?.round() ?? 0;
     final digits = amount.toString();
     final formatted = StringBuffer();
 

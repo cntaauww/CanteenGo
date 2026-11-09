@@ -2,13 +2,13 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-class MenuApiService {
-  static const String baseUrl = 'http://127.0.0.1:8000/api';
+import '../config/api_config.dart';
 
+class MenuApiService {
   Future<List<Map<String, dynamic>>> getMenus({
     required int canteenNumber,
   }) async {
-    final uri = Uri.parse('$baseUrl/menus')
+    final uri = Uri.parse('${ApiConfig.baseUrl}/menus')
         .replace(queryParameters: {'nomor_kantin': canteenNumber.toString()});
 
     final response = await http
@@ -40,7 +40,7 @@ class MenuApiService {
   }) async {
     final response = await http
         .post(
-          Uri.parse('$baseUrl/menus'),
+          Uri.parse('${ApiConfig.baseUrl}/menus'),
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
@@ -59,7 +59,7 @@ class MenuApiService {
   }) async {
     final response = await http
         .put(
-          Uri.parse('$baseUrl/menus/$id'),
+          Uri.parse('${ApiConfig.baseUrl}/menus/$id'),
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
@@ -74,7 +74,7 @@ class MenuApiService {
   Future<void> deleteMenu(int id) async {
     final response = await http
         .delete(
-          Uri.parse('$baseUrl/menus/$id'),
+          Uri.parse('${ApiConfig.baseUrl}/menus/$id'),
           headers: {'Accept': 'application/json'},
         )
         .timeout(const Duration(seconds: 15));

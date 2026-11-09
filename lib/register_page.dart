@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'config/api_config.dart';
+
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
@@ -26,8 +28,6 @@ class _RegisterPageState extends State<RegisterPage> {
   static const Color lavender = Color(0xFF9B7DD4);
   static const Color darkPurple = Color(0xFF65469B);
 
-  static const String baseUrl = 'http://127.0.0.1:8000/api';
-
   @override
   void dispose() {
     _nameController.dispose();
@@ -47,7 +47,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/register'),
+        Uri.parse('${ApiConfig.baseUrl}/register'),
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',

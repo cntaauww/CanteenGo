@@ -33,7 +33,7 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
   }
 
   Future<Map<String, dynamic>> _fetchDashboard() async {
-    final token = await AuthService.instance.getToken();
+    final token = await AuthService.instance.getToken(role: 'admin');
     if (token == null || token.isEmpty) {
       throw Exception(
         'Sesi login admin tidak ditemukan. Silakan login kembali.',
@@ -51,7 +51,7 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
         .timeout(const Duration(seconds: 15));
 
     if (response.statusCode == 401) {
-      await AuthService.instance.clearToken();
+      await AuthService.instance.clearToken(role: 'admin');
       throw Exception('Sesi login admin berakhir. Silakan login kembali.');
     }
 
@@ -86,7 +86,7 @@ class _AdminSystemDashboardPageState extends State<AdminSystemDashboardPage> {
 
   Future<void> _logout() async {
     try {
-      await AuthService.instance.logout();
+      await AuthService.instance.logout(role: 'admin');
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

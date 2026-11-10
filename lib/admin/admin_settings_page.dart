@@ -25,12 +25,12 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
   }
 
   Future<Map<String, dynamic>> _fetchSettings() async {
-    final token = await AuthService.instance.getToken();
+    final token = await AuthService.instance.getToken(role: 'admin');
     if (token == null || token.isEmpty) {
       throw Exception('Sesi admin tidak ditemukan. Silakan login kembali.');
     }
 
-    final profile = await AuthService.instance.getProfile();
+    final profile = await AuthService.instance.getProfile(role: 'admin');
     if (profile['role'] != 'admin' || profile['status_akun'] != 'aktif') {
       throw Exception(
         'Hanya admin aktif yang dapat membuka pengaturan sistem.',
@@ -48,7 +48,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
         .timeout(const Duration(seconds: 15));
 
     if (response.statusCode == 401) {
-      await AuthService.instance.clearToken();
+      await AuthService.instance.clearToken(role: 'admin');
       throw Exception('Sesi login admin berakhir. Silakan login kembali.');
     }
 

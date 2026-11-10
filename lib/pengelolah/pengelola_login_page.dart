@@ -88,13 +88,13 @@ class _PengelolaLoginPageState extends State<PengelolaLoginPage> {
       final user = data is Map ? data['user'] : null;
 
       if (user is! Map) {
-        await AuthService.instance.logout();
         throw Exception('Data pengguna dari server tidak valid.');
       }
 
       final role = user['role']?.toString();
       final status = user['status_akun']?.toString();
       final rawCanteenNumber = user['nomor_kantin'];
+      final tokenRole = role;
 
       final userCanteenNumber = int.tryParse(
         rawCanteenNumber?.toString() ?? '',
@@ -103,7 +103,9 @@ class _PengelolaLoginPageState extends State<PengelolaLoginPage> {
       if (role != 'pk' ||
           status != 'aktif' ||
           userCanteenNumber != canteenNumber) {
-        await AuthService.instance.logout();
+        if (tokenRole != null) {
+          await AuthService.instance.logout(role: tokenRole);
+        }
 
         throw Exception(
           'Akun tidak memiliki akses ke $canteenName. '

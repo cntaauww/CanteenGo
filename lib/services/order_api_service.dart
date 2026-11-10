@@ -17,7 +17,7 @@ class OrderApiService {
     required List<Map<String, int>> items,
     String? notes,
   }) async {
-    final token = await AuthService.instance.getToken();
+    final token = await AuthService.instance.getToken(role: 'mahasiswa');
 
     if (token == null || token.isEmpty) {
       throw Exception('Silakan login terlebih dahulu untuk membuat pesanan.');
@@ -83,7 +83,7 @@ class OrderApiService {
       }
 
       if (response.statusCode == 401) {
-        await AuthService.instance.clearToken();
+        await AuthService.instance.clearToken(role: 'mahasiswa');
         throw Exception('Sesi login berakhir. Silakan login kembali.');
       }
 
@@ -123,24 +123,25 @@ class OrderApiService {
 
   // Mengambil riwayat pesanan mahasiswa.
   Future<List<Map<String, dynamic>>> getOrders() async {
-    return _getOrdersFromEndpoint('/orders');
+    return _getOrdersFromEndpoint('/orders', role: 'mahasiswa');
   }
 
   // Mengambil pesanan masuk khusus PK.
   Future<List<Map<String, dynamic>>> getPkOrders() async {
-    return _getOrdersFromEndpoint('/pk/orders');
+    return _getOrdersFromEndpoint('/pk/orders', role: 'pk');
   }
 
   // Mengambil pesanan dari seluruh kantin khusus admin.
   Future<List<Map<String, dynamic>>> getAdminOrders() async {
-    return _getOrdersFromEndpoint('/admin/orders');
+    return _getOrdersFromEndpoint('/admin/orders', role: 'admin');
   }
 
   // Fungsi umum untuk mengambil daftar pesanan dari Laravel.
   Future<List<Map<String, dynamic>>> _getOrdersFromEndpoint(
-    String endpoint,
-  ) async {
-    final token = await AuthService.instance.getToken();
+    String endpoint, {
+    required String role,
+  }) async {
+    final token = await AuthService.instance.getToken(role: role);
 
     if (token == null || token.isEmpty) {
       throw Exception('Silakan login untuk melihat pesanan.');
@@ -175,7 +176,7 @@ class OrderApiService {
       }
 
       if (response.statusCode == 401) {
-        await AuthService.instance.clearToken();
+        await AuthService.instance.clearToken(role: role);
         throw Exception('Sesi login berakhir. Silakan login kembali.');
       }
 
@@ -189,7 +190,7 @@ class OrderApiService {
 
   // Mengonfirmasi pembayaran pesanan oleh pengelola kantin.
   Future<void> confirmPayment({required int orderId}) async {
-    final token = await AuthService.instance.getToken();
+    final token = await AuthService.instance.getToken(role: 'pk');
 
     if (token == null || token.isEmpty) {
       throw Exception('Silakan login kembali.');
@@ -215,7 +216,7 @@ class OrderApiService {
       }
 
       if (response.statusCode == 401) {
-        await AuthService.instance.clearToken();
+        await AuthService.instance.clearToken(role: 'pk');
         throw Exception('Sesi login berakhir. Silakan login kembali.');
       }
 
@@ -229,7 +230,7 @@ class OrderApiService {
 
   // Menandai pesanan yang sudah dibayar sebagai siap diambil oleh PK.
   Future<void> markOrderReady({required int orderId}) async {
-    final token = await AuthService.instance.getToken();
+    final token = await AuthService.instance.getToken(role: 'pk');
 
     if (token == null || token.isEmpty) {
       throw Exception('Silakan login kembali.');
@@ -255,12 +256,52 @@ class OrderApiService {
       }
 
       if (response.statusCode == 401) {
-        await AuthService.instance.clearToken();
+        await AuthService.instance.clearToken(role: 'pk');
         throw Exception('Sesi login berakhir. Silakan login kembali.');
       }
 
       throw Exception(
         decoded['message']?.toString() ?? 'Status pesanan gagal diperbarui.',
+      );
+    } on FormatException {
+      throw Exception('Respons server tidak dapat dibaca.');
+    }
+  }
+
+  // Menandai pesanan siap diambil sebagai selesai oleh PK.
+  Future<void> markOrderComplete({required int orderId}) async {
+    final token = await AuthService.instance.getToken(role: 'pk');
+
+    if (token == null || token.isEmpty) {
+      throw Exception('Silakan login kembali.');
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/orders/$orderId/mark-complete'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final dynamic decoded = jsonDecode(response.body);
+
+      if (decoded is! Map<String, dynamic>) {
+        throw Exception('Respons server tidak valid.');
+      }
+
+      if (response.statusCode == 200 && decoded['success'] == true) {
+        return;
+      }
+
+      if (response.statusCode == 401) {
+        await AuthService.instance.clearToken(role: 'pk');
+        throw Exception('Sesi login berakhir. Silakan login kembali.');
+      }
+
+      throw Exception(
+        decoded['message']?.toString() ?? 'Pesanan gagal diselesaikan.',
       );
     } on FormatException {
       throw Exception('Respons server tidak dapat dibaca.');

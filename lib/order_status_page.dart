@@ -46,7 +46,7 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
     }
 
     try {
-      final token = await AuthService.instance.getToken();
+      final token = await AuthService.instance.getToken(role: 'mahasiswa');
 
       if (token == null || token.isEmpty) {
         throw Exception('Silakan login kembali untuk melihat pesanan.');
@@ -61,7 +61,7 @@ class _OrderStatusPageState extends State<OrderStatusPage> {
       );
 
       if (response.statusCode == 401) {
-        await AuthService.instance.clearToken();
+        await AuthService.instance.clearToken(role: 'mahasiswa');
         throw Exception('Sesi login berakhir. Silakan login kembali.');
       }
 

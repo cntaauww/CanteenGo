@@ -13,45 +13,83 @@ class AuthService {
   static const String _tokenKey = 'canteengo_token';
   static const String _userKey = 'canteengo_user';
 
-  // Mengambil token login yang tersimpan.
-  Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
-  }
+  String _tokenKeyForRole(String role) => '${_tokenKey}_$role';
 
-  // Mengambil data pengguna yang tersimpan.
-  Future<Map<String, dynamic>?> getSavedUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userJson = prefs.getString(_userKey);
+  String _userKeyForRole(String role) => '${_userKey}_$role';
 
+  Map<String, dynamic>? _decodeUser(String? userJson) {
     if (userJson == null || userJson.isEmpty) {
       return null;
     }
 
     try {
       final decoded = jsonDecode(userJson);
-
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-
-      return null;
-    } catch (_) {
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } on FormatException {
       return null;
     }
   }
 
-  // Menyimpan token login.
-  Future<void> saveToken(String token) async {
+  // Mengambil token login sesuai peran agar sesi mahasiswa dan PK terpisah.
+  Future<String?> getToken({required String role}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
+    final roleToken = prefs.getString(_tokenKeyForRole(role));
+
+    if (roleToken != null && roleToken.isNotEmpty) {
+      return roleToken;
+    }
+
+    final legacyUser = _decodeUser(prefs.getString(_userKey));
+    if (legacyUser?['role'] != role) {
+      return null;
+    }
+
+    final legacyToken = prefs.getString(_tokenKey);
+    if (legacyToken == null || legacyToken.isEmpty) {
+      return null;
+    }
+
+    await prefs.setString(_tokenKeyForRole(role), legacyToken);
+    await prefs.setString(_userKeyForRole(role), jsonEncode(legacyUser));
+
+    return legacyToken;
   }
 
-  // Menghapus token dan data pengguna lokal.
-  Future<void> clearToken() async {
+  // Mengambil data pengguna yang tersimpan sesuai peran.
+  Future<Map<String, dynamic>?> getSavedUser({required String role}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
-    await prefs.remove(_userKey);
+    final roleUserJson = prefs.getString(_userKeyForRole(role));
+    if (roleUserJson != null) {
+      return _decodeUser(roleUserJson);
+    }
+
+    final legacyUserJson = prefs.getString(_userKey);
+    final legacyUser = _decodeUser(legacyUserJson);
+    if (legacyUser?['role'] != role) {
+      return null;
+    }
+
+    await prefs.setString(_userKeyForRole(role), legacyUserJson!);
+    return legacyUser;
+  }
+
+  // Menyimpan token login.
+  Future<void> saveToken(String token, {required String role}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tokenKeyForRole(role), token);
+  }
+
+  // Menghapus token dan data pengguna lokal untuk satu peran.
+  Future<void> clearToken({required String role}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tokenKeyForRole(role));
+    await prefs.remove(_userKeyForRole(role));
+
+    final legacyUser = _decodeUser(prefs.getString(_userKey));
+    if (legacyUser?['role'] == role) {
+      await prefs.remove(_tokenKey);
+      await prefs.remove(_userKey);
+    }
   }
 
   // Login mahasiswa, pengelola kantin, atau admin.
@@ -97,10 +135,15 @@ class AuthService {
           );
         }
 
+        final role = userValue['role']?.toString();
+        if (role == null || !{'mahasiswa', 'pk', 'admin'}.contains(role)) {
+          throw Exception('Peran pengguna dari server tidak valid.');
+        }
+
         final prefs = await SharedPreferences.getInstance();
 
-        await prefs.setString(_tokenKey, tokenValue);
-        await prefs.setString(_userKey, jsonEncode(userValue));
+        await saveToken(tokenValue, role: role);
+        await prefs.setString(_userKeyForRole(role), jsonEncode(userValue));
 
         return result;
       }
@@ -124,8 +167,8 @@ class AuthService {
   }
 
   // Mengambil profil pengguna dari Laravel.
-  Future<Map<String, dynamic>> getProfile() async {
-    final token = await getToken();
+  Future<Map<String, dynamic>> getProfile({required String role}) async {
+    final token = await getToken(role: role);
 
     if (token == null || token.isEmpty) {
       throw Exception('Kamu belum login.');
@@ -156,13 +199,13 @@ class AuthService {
         }
 
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_userKey, jsonEncode(data));
+        await prefs.setString(_userKeyForRole(role), jsonEncode(data));
 
         return data;
       }
 
       if (response.statusCode == 401 || response.statusCode == 403) {
-        await clearToken();
+        await clearToken(role: role);
       }
 
       throw Exception(
@@ -174,8 +217,8 @@ class AuthService {
   }
 
   // Logout dari Laravel dan hapus data login lokal.
-  Future<void> logout() async {
-    final token = await getToken();
+  Future<void> logout({required String role}) async {
+    final token = await getToken(role: role);
 
     try {
       if (token != null && token.isNotEmpty) {
@@ -188,7 +231,7 @@ class AuthService {
         );
       }
     } finally {
-      await clearToken();
+      await clearToken(role: role);
     }
   }
 }

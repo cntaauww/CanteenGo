@@ -95,7 +95,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (isCreatingOrder) return;
 
     // Periksa login terlebih dahulu.
-    final token = await AuthService.instance.getToken();
+    final token = await AuthService.instance.getToken(role: 'mahasiswa');
 
     if (!context.mounted) return;
 

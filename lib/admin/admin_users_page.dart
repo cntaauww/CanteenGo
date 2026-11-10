@@ -35,7 +35,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     });
 
     try {
-      final token = await AuthService.instance.getToken();
+      final token = await AuthService.instance.getToken(role: 'admin');
 
       if (token == null || token.isEmpty) {
         throw Exception('Sesi admin tidak ditemukan. Silakan login kembali.');
@@ -52,7 +52,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
           .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 401) {
-        await AuthService.instance.clearToken();
+        await AuthService.instance.clearToken(role: 'admin');
         throw Exception('Sesi login berakhir. Silakan login kembali.');
       }
 
@@ -113,7 +113,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     final userId = user['id'];
 
     try {
-      final token = await AuthService.instance.getToken();
+      final token = await AuthService.instance.getToken(role: 'admin');
 
       if (token == null || token.isEmpty) {
         throw Exception('Sesi admin tidak ditemukan.');

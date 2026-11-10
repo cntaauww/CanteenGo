@@ -136,6 +136,72 @@ class _DetailOrderPageState extends State<DetailOrderPage> {
     }
   }
 
+  Future<void> markComplete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Selesaikan Pesanan'),
+        content: const Text(
+          'Pastikan pesanan sudah diambil oleh mahasiswa. Tandai pesanan selesai?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Kembali'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Ya, Selesaikan'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final orderId = int.tryParse(widget.order['id']?.toString() ?? '');
+
+    if (orderId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ID pesanan tidak ditemukan.')),
+      );
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    try {
+      await OrderApiService.instance.markOrderComplete(orderId: orderId);
+
+      if (!mounted) return;
+
+      setState(() {
+        status = 'Selesai';
+        widget.order['status'] = 'Selesai';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pesanan berhasil diselesaikan.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
@@ -332,6 +398,31 @@ class _DetailOrderPageState extends State<DetailOrderPage> {
                   ),
                 ),
               )
+            else if (status == 'Siap Diambil')
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: isLoading ? null : markComplete,
+                  icon: isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.task_alt),
+                  label: Text(
+                    isLoading ? 'Memproses...' : 'Selesaikan Pesanan',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                  ),
+                ),
+              )
             else
               Container(
                 width: double.infinity,
@@ -343,6 +434,8 @@ class _DetailOrderPageState extends State<DetailOrderPage> {
                 child: Text(
                   status == 'Siap Diambil'
                       ? 'Pesanan sudah siap diambil mahasiswa.'
+                      : status == 'Selesai'
+                      ? 'Pesanan telah selesai.'
                       : 'Status pesanan: $status.',
                   textAlign: TextAlign.center,
                 ),

@@ -54,7 +54,12 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
       if (user is! Map ||
           user['role'] != 'admin' ||
           user['status_akun'] != 'aktif') {
-        await AuthService.instance.logout();
+        if (user is Map) {
+          final role = user['role']?.toString();
+          if (role != null) {
+            await AuthService.instance.logout(role: role);
+          }
+        }
         throw Exception('Akun tidak memiliki akses admin sistem.');
       }
 

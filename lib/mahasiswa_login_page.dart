@@ -70,7 +70,9 @@ class _MahasiswaLoginPageState extends State<MahasiswaLoginPage> {
       final status = user['status_akun']?.toString();
 
       if (role != 'mahasiswa') {
-        await AuthService.instance.logout();
+        if (role != null) {
+          await AuthService.instance.logout(role: role);
+        }
 
         if (!mounted) return;
 
@@ -81,7 +83,7 @@ class _MahasiswaLoginPageState extends State<MahasiswaLoginPage> {
       }
 
       if (status != 'aktif') {
-        await AuthService.instance.logout();
+        await AuthService.instance.logout(role: 'mahasiswa');
 
         if (!mounted) return;
 

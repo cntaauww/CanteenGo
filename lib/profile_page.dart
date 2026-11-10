@@ -29,7 +29,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> loadProfile() async {
     try {
-      final savedUser = await AuthService.instance.getSavedUser();
+      final savedUser = await AuthService.instance.getSavedUser(
+        role: 'mahasiswa',
+      );
 
       if (!mounted) return;
 
@@ -75,7 +77,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> openOrderHistory() async {
-    final token = await AuthService.instance.getToken();
+    final token = await AuthService.instance.getToken(role: 'mahasiswa');
 
     if (!mounted) return;
 
@@ -122,7 +124,7 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => isLoggingOut = true);
 
     try {
-      await AuthService.instance.logout();
+      await AuthService.instance.logout(role: 'mahasiswa');
 
       if (!mounted) return;
 

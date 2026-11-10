@@ -220,14 +220,8 @@ class _OrderPageState extends State<OrderPage> {
       );
     }
 
-    // Tampilkan pesanan aktif sebelumnya hanya jika tidak ada item baru
-    // di keranjang mahasiswa.
+    // Keranjang kosong tetap membuka tampilan keranjang, bukan pesanan lama.
     if (items.isEmpty) {
-      final order = activeOrder;
-      if (order != null) {
-        return buildExistingOrder(order);
-      }
-
       return Scaffold(
         backgroundColor: background,
         appBar: buildAppBar(),
@@ -858,6 +852,8 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   Widget buildEmptyCart() {
+    final order = activeOrder;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(28),
@@ -901,6 +897,27 @@ class _OrderPageState extends State<OrderPage> {
                 ),
               ),
             ),
+            if (order != null) ...[
+              const SizedBox(height: 18),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => buildExistingOrder(order),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: Text(
+                  'Lihat pesanan aktif (${order['kode_pesanan'] ?? '-'})',
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: purple,
+                  side: const BorderSide(color: lilac),
+                ),
+              ),
+            ],
           ],
         ),
       ),

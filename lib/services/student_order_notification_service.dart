@@ -68,7 +68,7 @@ class StudentOrderNotificationService {
     _isRefreshing = true;
 
     try {
-      final token = await AuthService.instance.getToken();
+      final token = await AuthService.instance.getToken(role: 'mahasiswa');
       if (token == null || token.isEmpty) {
         _hasBaseline = true;
         orders.value = const [];

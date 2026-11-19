@@ -202,11 +202,36 @@ class _DetailOrderPageState extends State<DetailOrderPage> {
     }
   }
 
+  String _formatOrderNotes(String notes, List<dynamic> items) {
+    var formattedNotes = notes;
+
+    for (final item in items) {
+      if (item is! Map) continue;
+
+      final name = (item['name'] ?? item['nama'] ?? item['nama_menu'])
+          ?.toString()
+          .trim();
+
+      if (name == null || name.isEmpty) continue;
+
+      formattedNotes = formattedNotes.replaceAllMapped(
+        RegExp('(^|\\n)${RegExp.escape(name)}:\\s*', multiLine: true),
+        (match) => match.group(1) ?? '',
+      );
+    }
+
+    return formattedNotes.trim();
+  }
+
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
 
     final items = (order['items'] as List<dynamic>?) ?? [];
+    final notes = _formatOrderNotes(
+      order['catatan']?.toString() ?? '',
+      items,
+    );
 
     final int total = int.tryParse(order['total']?.toString() ?? '0') ?? 0;
 
@@ -309,6 +334,11 @@ class _DetailOrderPageState extends State<DetailOrderPage> {
                   ),
                 );
               }),
+
+            if (notes.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _infoRow('Catatan Pesanan', notes),
+            ],
 
             const SizedBox(height: 24),
 

@@ -708,17 +708,22 @@ class _PengelolaDashboardPageState extends State<PengelolaDashboardPage> {
 
                 activeTrackColor: purple,
 
-                onChanged: (value) {
+                onChanged: (value) async {
                   final index = _menuIndex(menu);
 
                   if (index != -1) {
-                    menuStore.setAvailability(
-                      widget.canteenId,
-
-                      index,
-
-                      value && stock > 0,
-                    );
+                    try {
+                      await menuStore.setAvailability(
+                        widget.canteenId,
+                        index,
+                        value && stock > 0,
+                      );
+                    } catch (error) {
+                      _showMessage(
+                        'Gagal memperbarui ketersediaan: '
+                        '${error.toString().replaceFirst('Exception: ', '')}',
+                      );
+                    }
                   }
                 },
               ),
@@ -735,104 +740,125 @@ class _PengelolaDashboardPageState extends State<PengelolaDashboardPage> {
     final priceController = TextEditingController();
 
     final stockController = TextEditingController();
+    var isSaving = false;
 
     await showDialog<void>(
       context: context,
 
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Tambah Menu'),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Tambah Menu'),
 
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
 
-            children: [
-              TextField(
-                controller: nameController,
+              children: [
+                TextField(
+                  controller: nameController,
 
-                decoration: const InputDecoration(labelText: 'Nama menu'),
-              ),
-
-              TextField(
-                controller: priceController,
-
-                keyboardType: TextInputType.number,
-
-                decoration: const InputDecoration(
-                  labelText: 'Harga (contoh: 13000)',
+                  decoration: const InputDecoration(labelText: 'Nama menu'),
                 ),
-              ),
 
-              TextField(
-                controller: stockController,
+                TextField(
+                  controller: priceController,
 
-                keyboardType: TextInputType.number,
+                  keyboardType: TextInputType.number,
 
-                decoration: const InputDecoration(labelText: 'Jumlah stok'),
-              ),
-            ],
+                  decoration: const InputDecoration(
+                    labelText: 'Harga (contoh: 13000)',
+                  ),
+                ),
+
+                TextField(
+                  controller: stockController,
+
+                  keyboardType: TextInputType.number,
+
+                  decoration: const InputDecoration(labelText: 'Jumlah stok'),
+                ),
+              ],
+            ),
           ),
+
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
+
+              child: const Text('Batal'),
+            ),
+
+            ElevatedButton(
+              onPressed: () async {
+                if (isSaving) return;
+
+                final name = nameController.text.trim();
+
+                final price = int.tryParse(priceController.text.trim());
+
+                final stock = int.tryParse(stockController.text.trim());
+
+                if (name.isEmpty ||
+                    price == null ||
+                    price <= 0 ||
+                    stock == null ||
+                    stock < 0) {
+                  _showMessage('Periksa kembali data menu.');
+
+                  return;
+                }
+
+                final duplicate = menus.any(
+                  (item) =>
+                      (item['name'] as String).toLowerCase() ==
+                      name.toLowerCase(),
+                );
+
+                if (duplicate) {
+                  _showMessage('Nama menu sudah ada di kantin ini.');
+
+                  return;
+                }
+
+                isSaving = true;
+                setDialogState(() {});
+
+                try {
+                  await menuStore.addMenu(widget.canteenId, {
+                    'name': name,
+                    'price': price,
+                    'stock': stock,
+                    'available': stock > 0,
+                    'icon': '🍽️',
+                    'image': '',
+                  });
+
+                  if (!mounted || !dialogContext.mounted) return;
+
+                  Navigator.pop(dialogContext);
+                  _showMessage('Menu berhasil ditambahkan.');
+                } catch (error) {
+                  _showMessage(
+                    'Gagal menambahkan menu: '
+                    '${error.toString().replaceFirst('Exception: ', '')}',
+                  );
+
+                  if (dialogContext.mounted) {
+                    setDialogState(() => isSaving = false);
+                  }
+                }
+              },
+
+              child: isSaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Simpan'),
+            ),
+          ],
         ),
-
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-
-            child: const Text('Batal'),
-          ),
-
-          ElevatedButton(
-            onPressed: () {
-              final name = nameController.text.trim();
-
-              final price = int.tryParse(priceController.text.trim());
-
-              final stock = int.tryParse(stockController.text.trim());
-
-              if (name.isEmpty ||
-                  price == null ||
-                  price <= 0 ||
-                  stock == null ||
-                  stock < 0) {
-                _showMessage('Periksa kembali data menu.');
-
-                return;
-              }
-
-              final duplicate = menus.any(
-                (item) =>
-                    (item['name'] as String).toLowerCase() ==
-                    name.toLowerCase(),
-              );
-
-              if (duplicate) {
-                _showMessage('Nama menu sudah ada di kantin ini.');
-
-                return;
-              }
-
-              menuStore.addMenu(widget.canteenId, {
-                'name': name,
-
-                'price': price,
-
-                'stock': stock,
-
-                'available': stock > 0,
-
-                'icon': '🍽️',
-
-                'image': '',
-              });
-
-              Navigator.pop(dialogContext);
-
-              _showMessage('Menu berhasil ditambahkan.');
-            },
-
-            child: const Text('Simpan'),
-          ),
-        ],
       ),
     );
 
@@ -900,7 +926,7 @@ class _PengelolaDashboardPageState extends State<PengelolaDashboardPage> {
           ),
 
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final name = nameController.text.trim();
 
               final price = int.tryParse(priceController.text.trim());
@@ -940,21 +966,25 @@ class _PengelolaDashboardPageState extends State<PengelolaDashboardPage> {
                 return;
               }
 
-              menuStore.updateMenu(widget.canteenId, index, {
-                ...menu,
+              try {
+                await menuStore.updateMenu(widget.canteenId, index, {
+                  ...menu,
+                  'name': name,
+                  'price': price,
+                  'stock': stock,
+                  'available': stock > 0 && menu['available'] == true,
+                });
 
-                'name': name,
+                if (!mounted || !dialogContext.mounted) return;
 
-                'price': price,
-
-                'stock': stock,
-
-                'available': stock > 0 && menu['available'] == true,
-              });
-
-              Navigator.pop(dialogContext);
-
-              _showMessage('Menu berhasil diperbarui.');
+                Navigator.pop(dialogContext);
+                _showMessage('Menu berhasil diperbarui.');
+              } catch (error) {
+                _showMessage(
+                  'Gagal memperbarui menu: '
+                  '${error.toString().replaceFirst('Exception: ', '')}',
+                );
+              }
             },
 
             child: const Text('Simpan Perubahan'),
@@ -1005,9 +1035,15 @@ class _PengelolaDashboardPageState extends State<PengelolaDashboardPage> {
       final index = _menuIndex(menu);
 
       if (index != -1) {
-        menuStore.deleteMenu(widget.canteenId, index);
-
-        _showMessage('Menu berhasil dihapus.');
+        try {
+          await menuStore.deleteMenu(widget.canteenId, index);
+          _showMessage('Menu berhasil dihapus.');
+        } catch (error) {
+          _showMessage(
+            'Gagal menghapus menu: '
+            '${error.toString().replaceFirst('Exception: ', '')}',
+          );
+        }
       } else {
         _showMessage('Menu tidak ditemukan.');
       }

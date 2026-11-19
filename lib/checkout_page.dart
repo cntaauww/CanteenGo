@@ -178,7 +178,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final note = widget.notes[name]?.trim() ?? '';
 
         if (note.isNotEmpty) {
-          notesList.add('$name: $note');
+          notesList.add(note);
         }
       }
 

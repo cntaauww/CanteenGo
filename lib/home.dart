@@ -85,7 +85,7 @@ class _HomePageState extends State<HomePage> {
     menuStore.addListener(_onMenusChanged);
     _notificationService.unreadCount.addListener(_onUnreadCountChanged);
     _notificationService.start();
-    menuStore.loadMenus(canteenId);
+    menuStore.loadMenus(canteenId, forceRefresh: true);
   }
 
   void _onUnreadCountChanged() {

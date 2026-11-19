@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
+import 'auth_service.dart';
 
 class MenuApiService {
   Future<List<Map<String, dynamic>>> getMenus({
@@ -38,13 +39,11 @@ class MenuApiService {
     required int canteenNumber,
     required Map<String, dynamic> menu,
   }) async {
+    final headers = await _managementHeaders();
     final response = await http
         .post(
           Uri.parse('${ApiConfig.baseUrl}/menus'),
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
+          headers: headers,
           body: jsonEncode(_toApiPayload(menu, canteenNumber)),
         )
         .timeout(const Duration(seconds: 15));
@@ -57,13 +56,11 @@ class MenuApiService {
     required int canteenNumber,
     required Map<String, dynamic> menu,
   }) async {
+    final headers = await _managementHeaders();
     final response = await http
         .put(
           Uri.parse('${ApiConfig.baseUrl}/menus/$id'),
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
+          headers: headers,
           body: jsonEncode(_toApiPayload(menu, canteenNumber)),
         )
         .timeout(const Duration(seconds: 15));
@@ -72,14 +69,29 @@ class MenuApiService {
   }
 
   Future<void> deleteMenu(int id) async {
+    final headers = await _managementHeaders();
     final response = await http
         .delete(
           Uri.parse('${ApiConfig.baseUrl}/menus/$id'),
-          headers: {'Accept': 'application/json'},
+          headers: headers,
         )
         .timeout(const Duration(seconds: 15));
 
-    _handleResponse(response);
+    await _handleResponse(response);
+  }
+
+  Future<Map<String, String>> _managementHeaders() async {
+    final token = await AuthService.instance.getToken(role: 'pk');
+
+    if (token == null || token.isEmpty) {
+      throw Exception('Silakan login kembali sebagai PK untuk mengelola menu.');
+    }
+
+    return {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
   }
 
   Map<String, dynamic> _toApiPayload(
@@ -103,7 +115,12 @@ class MenuApiService {
     };
   }
 
-  Map<String, dynamic> _handleResponse(http.Response response) {
+  Future<Map<String, dynamic>> _handleResponse(http.Response response) async {
+    if (response.statusCode == 401) {
+      await AuthService.instance.clearToken(role: 'pk');
+      throw Exception('Sesi login berakhir. Silakan login kembali.');
+    }
+
     dynamic decoded;
 
     try {
